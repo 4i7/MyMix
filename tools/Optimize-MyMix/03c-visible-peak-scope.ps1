@@ -34,6 +34,12 @@ Write-Text $managerPath $manager
 
 $collectionPath = 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs'
 $collection = Read-Text $collectionPath
+
+# Rewrite only the original timer hot path before inserting helper bodies. Doing this in
+# the opposite order would rewrite the helper's own call and turn it into recursion.
+$collection = $collection.Replace('                _deviceManager.UpdatePeakValues();', '                UpdatePeakValuesForVisibleSurfaces();')
+$collection = [regex]::Replace($collection, '(?ms)\s*foreach \(var device in AllDevices\)\s*\{\s*device\.UpdatePeakValueForeground\(\);\s*\}', "`r`n                            UpdatePeakForegroundForVisibleSurfaces();", 1)
+
 if ($collection -notmatch 'ShouldSampleAllPeakDevices') {
     $marker = '        private void PeakMeterTimer_Elapsed(object sender, ElapsedEventArgs e)'
     $helpers = @'
@@ -69,10 +75,11 @@ if ($collection -notmatch 'ShouldSampleAllPeakDevices') {
 '@
     $collection = $collection.Replace($marker, $helpers + $marker)
 }
-$collection = $collection.Replace('                _deviceManager.UpdatePeakValues();', '                UpdatePeakValuesForVisibleSurfaces();')
-$collection = [regex]::Replace($collection, '(?ms)\s*foreach \(var device in AllDevices\)\s*\{\s*device\.UpdatePeakValueForeground\(\);\s*\}', "`r`n                            UpdatePeakForegroundForVisibleSurfaces();", 1)
 Write-Text $collectionPath $collection
 
 Assert-Contains $collectionPath 'ShouldSampleAllPeakDevices'
+Assert-Contains $collectionPath '_deviceManager.UpdatePeakValues();'
 Assert-Contains $collectionPath '_deviceManager.UpdatePeakValues(Default.Id)'
+Assert-Contains $collectionPath 'foreach (var device in AllDevices)'
+Assert-NotContains $collectionPath 'if (ShouldSampleAllPeakDevices)`r`n            {`r`n                UpdatePeakValuesForVisibleSurfaces();'
 Assert-Contains $managerPath 'public void UpdatePeakValues(string deviceId = null)'
