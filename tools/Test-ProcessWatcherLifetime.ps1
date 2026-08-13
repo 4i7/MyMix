@@ -32,7 +32,7 @@ if ($null -eq $watchersField -or $null -eq $lockField) {
     throw 'ProcessWatcherService lifetime test hooks could not be resolved by reflection.'
 }
 
-$probeType = Add-Type -TypeDefinition @'
+$probeTypes = @(Add-Type -TypeDefinition @'
 using System;
 using System.Diagnostics;
 using System.Threading;
@@ -76,16 +76,14 @@ public static class MyMixProcessWatcherRace
             killThread.Join();
         }
 
-        if (disposeError != null || killError != null)
-        {
-            throw new AggregateException(new[] { disposeError, killError });
-        }
+        if (disposeError != null) throw new Exception("Registration.Dispose failed during race.", disposeError);
+        if (killError != null) throw new Exception("Process.Kill failed during race.", killError);
     }
 }
-'@ -PassThru
+'@ -PassThru)
 
-$counterType = @($probeType | Where-Object Name -eq 'MyMixProcessWatcherCounter')[0]
-$raceType = @($probeType | Where-Object Name -eq 'MyMixProcessWatcherRace')[0]
+$counterType = @($probeTypes | Where-Object Name -eq 'MyMixProcessWatcherCounter')[0]
+$raceType = @($probeTypes | Where-Object Name -eq 'MyMixProcessWatcherRace')[0]
 $watchers = [Collections.IDictionary]$watchersField.GetValue($null)
 $sync = $lockField.GetValue($null)
 $nonPublicInstance = [Reflection.BindingFlags]'NonPublic,Public,Instance'
@@ -95,8 +93,8 @@ function Assert-True([bool]$Condition, [string]$Message) {
 }
 
 function Wait-Until([scriptblock]$Condition, [string]$Message, [int]$TimeoutMilliseconds = 5000) {
-    $deadline = [Environment]::TickCount64 + $TimeoutMilliseconds
-    while ([Environment]::TickCount64 -lt $deadline) {
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while ($timer.ElapsedMilliseconds -lt $TimeoutMilliseconds) {
         if (& $Condition) { return }
         Start-Sleep -Milliseconds 25
     }
@@ -128,6 +126,16 @@ function New-Callback($Counter) {
 
 function Watch-Process([int]$ProcessId, $Counter) {
     [IDisposable]$watchMethod.Invoke($null, @($ProcessId, (New-Callback $Counter)))
+}
+
+function Get-WatcherCount {
+    [Threading.Monitor]::Enter($sync)
+    try {
+        return $watchers.Count
+    }
+    finally {
+        [Threading.Monitor]::Exit($sync)
+    }
 }
 
 function Get-WatcherData([int]$ProcessId) {
@@ -264,7 +272,7 @@ for ($i = 0; $i -lt 64; $i++) {
     }
 }
 
-Wait-Until { $watchers.Count -eq 0 } 'Race test left process watchers behind.' 10000
+Wait-Until { (Get-WatcherCount) -eq 0 } 'Race test left process watchers behind.' 10000
 foreach ($counter in $counters) {
     Assert-True ($counter.Value -le 1) 'A process-exit/unregister race produced a duplicate callback.'
 }
