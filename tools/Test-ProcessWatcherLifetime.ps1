@@ -30,8 +30,9 @@ public sealed class WatchCounter {
     public void Hit(int processId) { Interlocked.Increment(ref _count); }
 }
 public static class WatchRace {
-    public static void Run(IDisposable registration, Process process) {
+    public static void Run(IDisposable registration, int processId) {
         Exception a = null, b = null;
+        using (var process = Process.GetProcessById(processId))
         using (var gate = new ManualResetEvent(false)) {
             var t1 = new Thread(() => { gate.WaitOne(); try { registration.Dispose(); } catch (Exception ex) { a = ex; } });
             var t2 = new Thread(() => { gate.WaitOne(); try { if (!process.HasExited) process.Kill(); } catch (InvalidOperationException) { } catch (Exception ex) { b = ex; } });
@@ -68,7 +69,6 @@ function Gone([int]$processId, $data) {
     Until { (Handle $data) -eq [IntPtr]::Zero } "PID $processId process handle was not closed by the watcher thread."
 }
 
-# Same PID: dispose A, terminate process, only B fires once. Dispose is idempotent.
 $p = $null
 try {
     $p = New-Process; $a = New-Counter; $b = New-Counter
@@ -82,7 +82,6 @@ try {
     Gone $p.Id $data; $rb.Dispose(); $rb.Dispose()
 } finally { Stop-ProcessSafe $p }
 
-# Dispose every registration while process stays alive: zero callbacks, watcher reclaimed, handle zeroed.
 $p = $null
 try {
     $p = New-Process; $a = New-Counter; $b = New-Counter
@@ -92,7 +91,6 @@ try {
     Gone $p.Id $data; Assert ($a.Value -eq 0 -and $b.Value -eq 0) 'Callback fired after full unregister.'
 } finally { Stop-ProcessSafe $p }
 
-# 1000 create/dispose cycles against one long-lived PID must not accumulate callbacks.
 $p = $null
 try {
     $p = New-Process; $c = New-Counter
@@ -104,13 +102,12 @@ try {
     Assert ($c.Value -eq 0) 'Stress callback fired while process was alive.'
 } finally { Stop-ProcessSafe $p }
 
-# Race process exit against Dispose repeatedly; each registration may fire zero or once, never twice.
 $counters = New-Object System.Collections.Generic.List[object]
 for ($i = 0; $i -lt 64; $i++) {
     $p = $null
     try {
         $p = New-Process; $c = New-Counter; $counters.Add($c); $r = Register $p $c
-        $raceType.GetMethod('Run').Invoke($null, @($r, $p)); $p.WaitForExit(5000) | Out-Null
+        $raceType.GetMethod('Run').Invoke($null, @($r, [int]$p.Id)); $p.WaitForExit(5000) | Out-Null
     } finally { Stop-ProcessSafe $p }
 }
 Until { (Watcher-Count) -eq 0 } 'Race test left watchers behind.' 10000
