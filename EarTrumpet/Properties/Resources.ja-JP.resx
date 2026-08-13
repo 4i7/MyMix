@@ -283,9 +283,7 @@
     <value>MyMixの起動に失敗しました</value>
   </data>
   <data name="CriticalFailureFontLookupHelpText" xml:space="preserve">
-    <value>システム上の破損したフォントがMyMix の起動を妨げています。
-
-修正情報のWebページ [https://eartrumpet.app/jmp/fixfonts] を開きますか？</value>
+    <value>A damaged or incompatible font is preventing MyMix from starting. Repair or remove the affected font and try again.</value>
   </data>
   <data name="ToggleMuteToolTip" xml:space="preserve">
     <value>ミュートのオン・オフ</value>
@@ -294,7 +292,7 @@
     <value>プライバシー ポリシー</value>
   </data>
   <data name="PrivacyCheckboxText" xml:space="preserve">
-    <value>障害データをMyMix チームに送信する</value>
+    <value>Crash reporting is disabled in MyMix.</value>
   </data>
   <data name="ActionAdditionalText" xml:space="preserve">
     <value>かつ</value>

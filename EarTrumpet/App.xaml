@@ -111,8 +111,6 @@
             <Thickness x:Key="NoItemsPaneMargin">24</Thickness>
             <bcl:Double x:Key="MutedOpacity">0.4</bcl:Double>
 
-            <bcl:String x:Key="EarTrumpetIconLight">pack://application:,,,/MyMix;component/Assets/Icon-Light.ico</bcl:String>
-            <bcl:String x:Key="EarTrumpetIconDark">pack://application:,,,/MyMix;component/Assets/Icon-Dark.ico</bcl:String>
 
             <Style x:Key="Windows10FocusVisualStyle">
                 <Setter Property="Control.Template">
@@ -479,7 +477,6 @@
                 <Setter Property="Theme:Brush.Background" Value="Transparent" />
                 <Setter Property="Theme:Brush.Foreground" Value="Text" />
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="Icon" Value="{Binding Source={StaticResource EarTrumpetIconLight}}" />
                 <Setter Property="ShowInTaskbar" Value="True" />
                 <Setter Property="WindowStyle" Value="None" />
                 <Setter Property="WindowChrome.WindowChrome">
@@ -499,7 +496,6 @@
                         <Setter Property="BorderThickness" Value="0" />
                     </Trigger>
                     <DataTrigger Binding="{Binding Source={StaticResource ThemeManager}, Path=IsSystemLightTheme}" Value="False">
-                        <Setter Property="Icon" Value="{Binding Source={StaticResource EarTrumpetIconDark}}" />
                     </DataTrigger>
                 </Style.Triggers>
             </Style>

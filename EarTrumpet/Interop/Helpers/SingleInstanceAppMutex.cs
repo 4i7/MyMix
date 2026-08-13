@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+using System;
+using System.Diagnostics;
 using System.Reflection;
 using System.Threading;
 
@@ -13,6 +14,8 @@ namespace EarTrumpet.Interop.Helpers
             var assembly = Assembly.GetExecutingAssembly();
             var mutexName = $"Local\\{assembly.GetName().Name}-0e510f7b-aed2-40b0-ad72-d2d3fdc89a02";
 
+            var testSuffix = Environment.GetEnvironmentVariable("MYMIX_MUTEX_SUFFIX");
+            if (!string.IsNullOrWhiteSpace(testSuffix)) mutexName += "-" + testSuffix;
             s_mutex = new Mutex(true, mutexName, out bool mutexCreated);
             if (!mutexCreated)
             {

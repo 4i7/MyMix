@@ -12,8 +12,6 @@ namespace EarTrumpet.UI.Helpers
     {
         enum IconKind
         {
-            EarTrumpet,
-            EarTrumpet_LightTheme,
             Muted,
             SpeakerZeroBars,
             SpeakerOneBar,
@@ -23,7 +21,6 @@ namespace EarTrumpet.UI.Helpers
         }
 
         public event Action<IShellNotifyIconSource> Changed;
-
         public Icon Current { get; private set; }
 
         private readonly DeviceCollectionViewModel _collection;
@@ -35,7 +32,6 @@ namespace EarTrumpet.UI.Helpers
         {
             _collection = collection;
             collection.TrayPropertyChanged += OnTrayPropertyChanged;
-
             OnTrayPropertyChanged();
         }
 
@@ -48,15 +44,13 @@ namespace EarTrumpet.UI.Helpers
         public void CheckForUpdate()
         {
             var nextHash = GetHash();
-            if (nextHash != _hash)
+            if (nextHash == _hash) return;
+
+            _hash = nextHash;
+            using (var old = Current)
             {
-                Trace.WriteLine($"TaskbarIconSource Changed: {nextHash}");
-                _hash = nextHash;
-                using (var old = Current)
-                {
-                    Current = SelectAndLoadIcon(_kind);
-                    Changed?.Invoke(this);
-                }
+                Current = SelectAndLoadIcon(_kind);
+                Changed?.Invoke(this);
             }
         }
 
@@ -68,64 +62,40 @@ namespace EarTrumpet.UI.Helpers
 
         private Icon SelectAndLoadIcon(IconKind kind)
         {
-
             try
             {
-                if (System.Windows.SystemParameters.HighContrast)
+                using (var icon = LoadSystemAudioIcon(kind))
                 {
-                    using (var icon = LoadIcon(kind))
+                    if (System.Windows.SystemParameters.HighContrast)
                     {
-                        return ColorIconForHighContrast(icon, kind, _isMouseOver);
+                        return IconHelper.ColorIcon(icon, GetIconFillPercent(kind),
+                            _isMouseOver ? System.Windows.SystemColors.HighlightTextColor : System.Windows.SystemColors.WindowTextColor);
                     }
-                }
-                else if (SystemSettings.IsSystemLightTheme)
-                {
-                    if (kind == IconKind.EarTrumpet)
+                    if (SystemSettings.IsSystemLightTheme)
                     {
-                        return LoadIcon(IconKind.EarTrumpet_LightTheme);
+                        return IconHelper.ColorIcon(icon, GetIconFillPercent(kind), System.Windows.Media.Colors.Black);
                     }
-                    else
-                    {
-                        using (var icon = LoadIcon(kind))
-                        {
-                            return ColorIconForLightTheme(icon, kind);
-                        }
-                    }
-                }
-                else
-                {
-                    return LoadIcon(kind);
+                    return (Icon)icon.Clone();
                 }
             }
-            // Legacy fallback if SndVolSSD.dll icons are unavailable.
-            catch (Exception ex) when (kind != IconKind.EarTrumpet)
+            catch (Exception ex)
             {
-                Trace.WriteLine($"TaskbarIconSource LoadIcon: {ex}");
-                return SelectAndLoadIcon(IconKind.EarTrumpet);
+                Trace.WriteLine($"TaskbarIconSource system-icon fallback: {ex}");
+                return (Icon)SystemIcons.Application.Clone();
             }
         }
 
-        private static Icon LoadIcon(IconKind kind)
+        private static Icon LoadSystemAudioIcon(IconKind kind)
         {
-            uint dpi = WindowsTaskbar.Dpi;
+            var dpi = WindowsTaskbar.Dpi;
             switch (kind)
             {
-                case IconKind.EarTrumpet:
-                    return IconHelper.LoadIconForTaskbar((string)App.Current.Resources["EarTrumpetIconDark"], dpi);
-                case IconKind.EarTrumpet_LightTheme:
-                    return IconHelper.LoadIconForTaskbar((string)App.Current.Resources["EarTrumpetIconLight"], dpi);
-                case IconKind.Muted:
-                    return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.Muted), dpi);
-                case IconKind.NoDevice:
-                    return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.NoDevice), dpi);
-                case IconKind.SpeakerZeroBars:
-                    return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.SpeakerZeroBars), dpi);
-                case IconKind.SpeakerOneBar:
-                    return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.SpeakerOneBar), dpi);
-                case IconKind.SpeakerTwoBars:
-                    return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.SpeakerTwoBars), dpi);
-                case IconKind.SpeakerThreeBars:
-                    return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.SpeakerThreeBars), dpi);
+                case IconKind.Muted: return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.Muted), dpi);
+                case IconKind.NoDevice: return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.NoDevice), dpi);
+                case IconKind.SpeakerZeroBars: return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.SpeakerZeroBars), dpi);
+                case IconKind.SpeakerOneBar: return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.SpeakerOneBar), dpi);
+                case IconKind.SpeakerTwoBars: return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.SpeakerTwoBars), dpi);
+                case IconKind.SpeakerThreeBars: return IconHelper.LoadIconForTaskbar(SndVolSSO.GetPath(SndVolSSO.IconId.SpeakerThreeBars), dpi);
                 default: throw new NotImplementedException();
             }
         }
@@ -138,48 +108,25 @@ namespace EarTrumpet.UI.Helpers
                 hash = (hash * 397) ^ (int)WindowsTaskbar.Dpi;
                 hash = (hash * 397) ^ (SystemSettings.IsSystemLightTheme ? 1 : 0);
                 hash = (hash * 397) ^ (System.Windows.SystemParameters.HighContrast ? 1 : 0);
-                if (System.Windows.SystemParameters.HighContrast)
-                {
-                    hash = (hash * 397) ^ (_isMouseOver ? 1 : 0);
-                }
+                if (System.Windows.SystemParameters.HighContrast) hash = (hash * 397) ^ (_isMouseOver ? 1 : 0);
                 return hash;
             }
         }
 
-        // Only fill part of the icon, so we can preserve the red X.
         private static double GetIconFillPercent(IconKind kind) => kind == IconKind.NoDevice ? 0.4 : 1;
 
-        private static Icon ColorIconForLightTheme(Icon darkIcon, IconKind kind)
+        private static IconKind IconKindFromDeviceCollection(DeviceCollectionViewModel collection)
         {
-            return IconHelper.ColorIcon(darkIcon, GetIconFillPercent(kind), System.Windows.Media.Colors.Black);
-        }
-
-        private static Icon ColorIconForHighContrast(Icon darkIcon, IconKind kind, bool isMouseOver)
-        {
-            return IconHelper.ColorIcon(darkIcon, GetIconFillPercent(kind),
-                isMouseOver ? System.Windows.SystemColors.HighlightTextColor : System.Windows.SystemColors.WindowTextColor);
-        }
-
-        private static IconKind IconKindFromDeviceCollection(DeviceCollectionViewModel collectionViewModel)
-        {
-            if (collectionViewModel.Default != null)
+            if (collection.Default == null) return IconKind.NoDevice;
+            switch (collection.Default.IconKind)
             {
-                switch (collectionViewModel.Default.IconKind)
-                {
-                    case DeviceViewModel.DeviceIconKind.Mute:
-                        return IconKind.Muted;
-                    case DeviceViewModel.DeviceIconKind.Bar0:
-                        return IconKind.SpeakerZeroBars;
-                    case DeviceViewModel.DeviceIconKind.Bar1:
-                        return IconKind.SpeakerOneBar;
-                    case DeviceViewModel.DeviceIconKind.Bar2:
-                        return IconKind.SpeakerTwoBars;
-                    case DeviceViewModel.DeviceIconKind.Bar3:
-                        return IconKind.SpeakerThreeBars;
-                    default: throw new NotImplementedException();
-                }
+                case DeviceViewModel.DeviceIconKind.Mute: return IconKind.Muted;
+                case DeviceViewModel.DeviceIconKind.Bar0: return IconKind.SpeakerZeroBars;
+                case DeviceViewModel.DeviceIconKind.Bar1: return IconKind.SpeakerOneBar;
+                case DeviceViewModel.DeviceIconKind.Bar2: return IconKind.SpeakerTwoBars;
+                case DeviceViewModel.DeviceIconKind.Bar3: return IconKind.SpeakerThreeBars;
+                default: throw new NotImplementedException();
             }
-            return IconKind.NoDevice;
         }
     }
 }

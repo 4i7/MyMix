@@ -8,3 +8,4 @@ vm_lifetime=explicit-dispose
 icon_cache=bounded-frozen
 appinfo_cache=per-process
 audio_callbacks=coalesced
+public_hardening=unbranded-icons-safe-finalizer-smoke-test

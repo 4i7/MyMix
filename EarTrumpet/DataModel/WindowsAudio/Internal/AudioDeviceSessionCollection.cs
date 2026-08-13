@@ -44,17 +44,16 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
 
         ~AudioDeviceSessionCollection()
         {
-            foreach (var session in _sessions)
+            try
             {
-                session.PropertyChanged -= Session_PropertyChanged;
+                foreach (var session in _sessions) session.PropertyChanged -= Session_PropertyChanged;
+                foreach (var session in _movedSessions) session.PropertyChanged -= MovedSession_PropertyChanged;
+                _sessionManager?.UnregisterSessionNotification(this);
             }
-
-            foreach (var session in _movedSessions)
+            catch (Exception ex)
             {
-                session.PropertyChanged -= MovedSession_PropertyChanged;
+                Trace.WriteLine($"AudioDeviceSessionCollection cleanup failed: {ex}");
             }
-
-            _sessionManager.UnregisterSessionNotification(this);
         }
 
         private void CreateAndAddSession(IAudioSessionControl session)

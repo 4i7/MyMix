@@ -20,7 +20,6 @@
     <UseVSHostingProcess>false</UseVSHostingProcess>
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <TargetFrameworkProfile />
-    <ApplicationIcon>Assets\Icon-Light.ico</ApplicationIcon>
     <ApplicationManifest>App.manifest</ApplicationManifest>
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
@@ -323,8 +322,6 @@
     <None Include="README.md" />
   </ItemGroup>
   <ItemGroup>
-    <Resource Include="Assets\Icon-Light.ico" />
-    <Resource Include="Assets\Icon-Dark.ico" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Properties\Resources.ja-JP.resx" />

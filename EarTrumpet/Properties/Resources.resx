@@ -283,9 +283,7 @@
     <value>MyMix couldn't start</value>
   </data>
   <data name="CriticalFailureFontLookupHelpText" xml:space="preserve">
-    <value>A broken font on your system is preventing MyMix from starting.
-
-Open [https://eartrumpet.app/jmp/fixfonts] now?</value>
+    <value>A damaged or incompatible font is preventing MyMix from starting. Repair or remove the affected font and try again.</value>
   </data>
   <data name="ToggleMuteToolTip" xml:space="preserve">
     <value>Toggle mute</value>
@@ -294,7 +292,7 @@ Open [https://eartrumpet.app/jmp/fixfonts] now?</value>
     <value>Privacy policy</value>
   </data>
   <data name="PrivacyCheckboxText" xml:space="preserve">
-    <value>Send crash data to the MyMix team</value>
+    <value>Crash reporting is disabled in MyMix.</value>
   </data>
   <data name="ActionAdditionalText" xml:space="preserve">
     <value>and</value>

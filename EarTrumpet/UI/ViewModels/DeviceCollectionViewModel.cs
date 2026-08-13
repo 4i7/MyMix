@@ -123,7 +123,8 @@ namespace EarTrumpet.UI.ViewModels
                     break;
 
                 case NotifyCollectionChangedAction.Reset:
-                    for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();
+                   for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();
+                     for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();
                     AllDevices.Clear();
                     foreach (var device in _deviceManager.Devices)
                     {
@@ -142,7 +143,7 @@ namespace EarTrumpet.UI.ViewModels
         {
             if (ShouldSampleAllPeakDevices)
             {
-                UpdatePeakValuesForVisibleSurfaces();
+                _deviceManager.UpdatePeakValues();
             }
             else if (_isFlyoutVisible && Default != null)
             {
@@ -154,7 +155,10 @@ namespace EarTrumpet.UI.ViewModels
         {
             if (ShouldSampleAllPeakDevices)
             {
-                            UpdatePeakForegroundForVisibleSurfaces();
+                foreach (var device in AllDevices)
+                {
+                    device.UpdatePeakValueForeground();
+                }
             }
             else if (_isFlyoutVisible)
             {

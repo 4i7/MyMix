@@ -1,4 +1,4 @@
-﻿using EarTrumpet.DataModel.Audio;
+using EarTrumpet.DataModel.Audio;
 using EarTrumpet.DataModel.WindowsAudio;
 using EarTrumpet.DataModel.WindowsAudio.Internal;
 using EarTrumpet.Extensions;
@@ -26,7 +26,7 @@ namespace EarTrumpet.Diagnosis
             DumpDeviceManager(ret, WindowsAudioFactory.Create(AudioDeviceKind.Playback));
             ret.AppendLine(logText);
 
-            var fileName = $"{Path.GetTempFileName()}.txt";
+            var fileName = Path.Combine(Path.GetTempPath(), $"MyMix-diagnostics-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.txt");
             File.WriteAllText(fileName, ret.ToString());
             ProcessHelper.StartNoThrow(fileName);
         }

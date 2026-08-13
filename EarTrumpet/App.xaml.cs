@@ -15,6 +15,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace EarTrumpet
 {
@@ -37,11 +38,13 @@ namespace EarTrumpet
         private WindowHolder _mixerWindow;
         private WindowHolder _settingsWindow;
         private ErrorReporter _errorReporter;
+        private bool _isSmokeTest;
 
         public static AppSettings Settings { get; private set; }
 
         private void OnAppStartup(object sender, StartupEventArgs e)
         {
+            _isSmokeTest = e.Args.Any(arg => string.Equals(arg, "--smoke-test", StringComparison.OrdinalIgnoreCase));
 
             Exit += (_, __) => IsShuttingDown = true;
             HasIdentity = false;
@@ -109,6 +112,11 @@ namespace EarTrumpet
             _trayIcon.Scrolled += trayIconScrolled;
             _trayIcon.SetTooltip(CollectionViewModel.GetTrayToolTip());
             _trayIcon.IsVisible = true;
+
+            if (_isSmokeTest)
+            {
+                Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => Shutdown(0)));
+            }
         }
 
         private void trayIconScrolled(object _, int wheelDelta)
@@ -125,8 +133,9 @@ namespace EarTrumpet
 
         private bool IsCriticalFontLoadFailure(Exception ex)
         {
-            return ex.StackTrace.Contains("MS.Internal.Text.TextInterface.FontFamily.GetFirstMatchingFont") ||
-                   ex.StackTrace.Contains("MS.Internal.Text.Line.Format");
+            var stackTrace = ex?.StackTrace ?? string.Empty;
+            return stackTrace.Contains("MS.Internal.Text.TextInterface.FontFamily.GetFirstMatchingFont") ||
+                   stackTrace.Contains("MS.Internal.Text.Line.Format");
         }
 
         private void OnCriticalFontLoadFailure()
