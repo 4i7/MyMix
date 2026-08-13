@@ -15,6 +15,7 @@ $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $TempBase = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
 $UpstreamWorktree = Join-Path $TempBase ('mymix-eartrumpet-' + [Guid]::NewGuid().ToString('N'))
 $CurrentMarkerText = if (Test-Path -LiteralPath $Marker) { [IO.File]::ReadAllText($Marker) } else { $null }
+$MyMixDocs = @('README.md', 'PRIVACY.md', 'COMPILING.md', 'CONTRIBUTING.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md')
 
 function Write-WorkflowOutput([string]$Name, [string]$Value) {
     if ($env:GITHUB_OUTPUT) {
@@ -52,7 +53,7 @@ function Get-CurrentUpstreamSha {
 }
 
 function Copy-UpstreamIntoRepository {
-    $preserve = @('.git', '.github', 'tools')
+    $preserve = @('.git', '.github', 'tools') + $MyMixDocs
 
     Get-ChildItem -LiteralPath $Root -Force | Where-Object {
         $_.Name -notin $preserve
@@ -66,11 +67,22 @@ function Copy-UpstreamIntoRepository {
     }
 
     foreach ($item in Get-ChildItem -LiteralPath $UpstreamWorktree -Force) {
-        if ($item.Name -in @('.git', '.github', 'README.md')) {
+        if ($item.Name -in (@('.git', '.github', 'README.md') + $MyMixDocs)) {
             continue
         }
 
         Copy-Item -LiteralPath $item.FullName -Destination (Join-Path $Root $item.Name) -Recurse -Force
+    }
+
+    # LICENSE deliberately comes from upstream on every refresh. Never replace it with a
+    # simplified license label: EarTrumpet's retained terms include explicit exclusions.
+    $upstreamLicense = Join-Path $UpstreamWorktree 'LICENSE'
+    $localLicense = Join-Path $Root 'LICENSE'
+    if (-not (Test-Path -LiteralPath $upstreamLicense) -or -not (Test-Path -LiteralPath $localLicense)) {
+        throw 'The upstream EarTrumpet LICENSE was not preserved during synchronization.'
+    }
+    if ([IO.File]::ReadAllText($upstreamLicense) -ne [IO.File]::ReadAllText($localLicense)) {
+        throw 'The local LICENSE does not exactly match the imported EarTrumpet LICENSE.'
     }
 }
 
@@ -146,7 +158,7 @@ try {
     & $validator
 
     Write-WorkflowOutput 'changed' 'true'
-    Write-Host "EarTrumpet $upstreamSha was converted, finalized, and deeply optimized for MyMix successfully."
+    Write-Host "EarTrumpet $upstreamSha was converted, finalized, deeply optimized, and public-hardened for MyMix successfully."
 }
 finally {
     Remove-Item -LiteralPath $UpstreamWorktree -Recurse -Force -ErrorAction SilentlyContinue
