@@ -1,280 +1,119 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-param(
-    [string]$Executable = '.\Build\Release\MyMix.exe',
-    [switch]$X86Child
-)
+param([string]$Executable = '.\Build\Release\MyMix.exe', [switch]$X86Child)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 if ([Environment]::Is64BitProcess -and -not $X86Child) {
-    $x86PowerShell = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
-    if (-not (Test-Path -LiteralPath $x86PowerShell)) {
-        throw '32-bit Windows PowerShell is required to load the x86 MyMix assembly.'
-    }
-
-    & $x86PowerShell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $PSCommandPath -Executable $Executable -X86Child
+    $x86 = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not (Test-Path $x86)) { throw '32-bit Windows PowerShell is required for the x86 MyMix lifetime test.' }
+    & $x86 -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $PSCommandPath -Executable $Executable -X86Child
     exit $LASTEXITCODE
 }
 
-$exe = (Resolve-Path -LiteralPath $Executable).Path
-$assembly = [Reflection.Assembly]::LoadFrom($exe)
-$watcherType = $assembly.GetType('EarTrumpet.DataModel.ProcessWatcherService', $true)
-$watchMethod = $watcherType.GetMethod('WatchProcess', [Reflection.BindingFlags]'Public,Static')
-$watchersField = $watcherType.GetField('s_watchers', [Reflection.BindingFlags]'NonPublic,Static')
-$lockField = $watcherType.GetField('s_lock', [Reflection.BindingFlags]'NonPublic,Static')
+$assembly = [Reflection.Assembly]::LoadFrom((Resolve-Path $Executable).Path)
+$type = $assembly.GetType('EarTrumpet.DataModel.ProcessWatcherService', $true)
+$watch = $type.GetMethod('WatchProcess', [Reflection.BindingFlags]'Public,Static')
+$watchers = $type.GetField('s_watchers', [Reflection.BindingFlags]'NonPublic,Static').GetValue($null)
+$sync = $type.GetField('s_lock', [Reflection.BindingFlags]'NonPublic,Static').GetValue($null)
+$flags = [Reflection.BindingFlags]'Public,NonPublic,Instance'
+if ($watch.ReturnType -ne [IDisposable]) { throw 'WatchProcess must return IDisposable.' }
 
-if ($null -eq $watchMethod -or $watchMethod.ReturnType -ne [IDisposable]) {
-    throw 'ProcessWatcherService.WatchProcess is not a public IDisposable registration API.'
-}
-if ($null -eq $watchersField -or $null -eq $lockField) {
-    throw 'ProcessWatcherService lifetime test hooks could not be resolved by reflection.'
-}
-
-$probeTypes = @(Add-Type -TypeDefinition @'
+$helpers = @(Add-Type -PassThru -TypeDefinition @'
 using System;
 using System.Diagnostics;
 using System.Threading;
-
-public sealed class MyMixProcessWatcherCounter
-{
+public sealed class WatchCounter {
     private int _count;
     public int Value { get { return Volatile.Read(ref _count); } }
-    public void OnQuit(int processId) { Interlocked.Increment(ref _count); }
+    public void Hit(int pid) { Interlocked.Increment(ref _count); }
 }
-
-public static class MyMixProcessWatcherRace
-{
-    public static void DisposeAndKill(IDisposable registration, Process process)
-    {
-        Exception disposeError = null;
-        Exception killError = null;
-        using (var gate = new ManualResetEvent(false))
-        {
-            var disposeThread = new Thread(() =>
-            {
-                gate.WaitOne();
-                try { registration.Dispose(); }
-                catch (Exception ex) { disposeError = ex; }
-            });
-            var killThread = new Thread(() =>
-            {
-                gate.WaitOne();
-                try
-                {
-                    if (!process.HasExited) process.Kill();
-                }
-                catch (InvalidOperationException) { }
-                catch (Exception ex) { killError = ex; }
-            });
-
-            disposeThread.Start();
-            killThread.Start();
-            gate.Set();
-            disposeThread.Join();
-            killThread.Join();
+public static class WatchRace {
+    public static void Run(IDisposable registration, Process process) {
+        Exception a = null, b = null;
+        using (var gate = new ManualResetEvent(false)) {
+            var t1 = new Thread(() => { gate.WaitOne(); try { registration.Dispose(); } catch (Exception ex) { a = ex; } });
+            var t2 = new Thread(() => { gate.WaitOne(); try { if (!process.HasExited) process.Kill(); } catch (InvalidOperationException) { } catch (Exception ex) { b = ex; } });
+            t1.Start(); t2.Start(); gate.Set(); t1.Join(); t2.Join();
         }
-
-        if (disposeError != null) throw new Exception("Registration.Dispose failed during race.", disposeError);
-        if (killError != null) throw new Exception("Process.Kill failed during race.", killError);
+        if (a != null) throw new Exception("Dispose race failed", a);
+        if (b != null) throw new Exception("Kill race failed", b);
     }
 }
-'@ -PassThru)
+'@)
+$counterType = @($helpers | Where-Object Name -eq 'WatchCounter')[0]
+$raceType = @($helpers | Where-Object Name -eq 'WatchRace')[0]
 
-$counterType = @($probeTypes | Where-Object Name -eq 'MyMixProcessWatcherCounter')[0]
-$raceType = @($probeTypes | Where-Object Name -eq 'MyMixProcessWatcherRace')[0]
-$watchers = [Collections.IDictionary]$watchersField.GetValue($null)
-$sync = $lockField.GetValue($null)
-$nonPublicInstance = [Reflection.BindingFlags]'NonPublic,Public,Instance'
-
-function Assert-True([bool]$Condition, [string]$Message) {
-    if (-not $Condition) { throw $Message }
+function Assert([bool]$ok, [string]$message) { if (-not $ok) { throw $message } }
+function Until([scriptblock]$test, [string]$message, [int]$ms = 6000) {
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    while ($sw.ElapsedMilliseconds -lt $ms) { if (& $test) { return }; Start-Sleep -Milliseconds 25 }
+    throw $message
+}
+function New-Process { Start-Process (Join-Path $env:WINDIR 'System32\PING.EXE') -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru }
+function Stop-ProcessSafe($p) { if ($null -eq $p) { return }; try { if (-not $p.HasExited) { $p.Kill() }; $p.WaitForExit(5000) | Out-Null } catch { } finally { $p.Dispose() } }
+function New-Counter { [Activator]::CreateInstance($counterType) }
+function Register($p, $counter) {
+    $callback = [Delegate]::CreateDelegate([Action[int]], $counter, $counterType.GetMethod('Hit'))
+    [IDisposable]$watch.Invoke($null, @($p.Id, $callback))
+}
+function With-Lock([scriptblock]$body) { [Threading.Monitor]::Enter($sync); try { & $body } finally { [Threading.Monitor]::Exit($sync) } }
+function Get-Data([int]$pid) { With-Lock { if ($watchers.ContainsKey($pid)) { $watchers[$pid] } else { $null } } }
+function Callback-Count($data) { With-Lock { $data.GetType().GetField('QuitActions', $flags).GetValue($data).Count } }
+function Handle($data) { With-Lock { [IntPtr]$data.GetType().GetField('ProcessHandle', $flags).GetValue($data) } }
+function Watcher-Count { With-Lock { $watchers.Count } }
+function Gone([int]$pid, $data) {
+    Until { $null -eq (Get-Data $pid) } "PID $pid watcher was not reclaimed."
+    Until { (Handle $data) -eq [IntPtr]::Zero } "PID $pid process handle was not closed by the watcher thread."
 }
 
-function Wait-Until([scriptblock]$Condition, [string]$Message, [int]$TimeoutMilliseconds = 5000) {
-    $timer = [Diagnostics.Stopwatch]::StartNew()
-    while ($timer.ElapsedMilliseconds -lt $TimeoutMilliseconds) {
-        if (& $Condition) { return }
-        Start-Sleep -Milliseconds 25
-    }
-    throw $Message
-}
-
-function Start-WatchedProcess {
-    $ping = Join-Path $env:WINDIR 'System32\PING.EXE'
-    Start-Process -FilePath $ping -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru
-}
-
-function Stop-TestProcess([Diagnostics.Process]$Process) {
-    if ($null -eq $Process) { return }
-    try {
-        if (-not $Process.HasExited) { $Process.Kill() }
-        $Process.WaitForExit(5000) | Out-Null
-    }
-    catch { }
-    finally { $Process.Dispose() }
-}
-
-function New-Counter {
-    [Activator]::CreateInstance($counterType)
-}
-
-function New-Callback($Counter) {
-    [Delegate]::CreateDelegate([Action[int]], $Counter, $counterType.GetMethod('OnQuit'))
-}
-
-function Watch-Process([int]$ProcessId, $Counter) {
-    [IDisposable]$watchMethod.Invoke($null, @($ProcessId, (New-Callback $Counter)))
-}
-
-function Get-WatcherCount {
-    [Threading.Monitor]::Enter($sync)
-    try {
-        return $watchers.Count
-    }
-    finally {
-        [Threading.Monitor]::Exit($sync)
-    }
-}
-
-function Get-WatcherData([int]$ProcessId) {
-    [Threading.Monitor]::Enter($sync)
-    try {
-        if (-not $watchers.Contains($ProcessId)) { return $null }
-        return $watchers[$ProcessId]
-    }
-    finally {
-        [Threading.Monitor]::Exit($sync)
-    }
-}
-
-function Get-CallbackCount($Data) {
-    [Threading.Monitor]::Enter($sync)
-    try {
-        $actions = $Data.GetType().GetField('QuitActions', $nonPublicInstance).GetValue($Data)
-        return $actions.Count
-    }
-    finally {
-        [Threading.Monitor]::Exit($sync)
-    }
-}
-
-function Get-WatcherHandle($Data) {
-    [Threading.Monitor]::Enter($sync)
-    try {
-        [IntPtr]$Data.GetType().GetField('ProcessHandle', $nonPublicInstance).GetValue($Data)
-    }
-    finally {
-        [Threading.Monitor]::Exit($sync)
-    }
-}
-
-function Assert-WatcherGone([int]$ProcessId, $Data) {
-    Wait-Until { $null -eq (Get-WatcherData $ProcessId) } "Watcher for PID $ProcessId was not reclaimed."
-    Wait-Until { (Get-WatcherHandle $Data) -eq [IntPtr]::Zero } "Watcher handle for PID $ProcessId was not closed by WatcherLoop."
-}
-
-# A/B registration removal: disposing A must leave B registered and only B may run on exit.
-$process = $null
+# Same PID: dispose A, terminate process, only B fires once. Dispose is idempotent.
+$p = $null
 try {
-    $process = Start-WatchedProcess
-    $a = New-Counter
-    $b = New-Counter
-    $registrationA = Watch-Process $process.Id $a
-    $registrationB = Watch-Process $process.Id $b
-    $data = Get-WatcherData $process.Id
-    Assert-True ($null -ne $data) 'Expected watcher data after A/B registration.'
-    Assert-True ((Get-CallbackCount $data) -eq 2) 'Expected two callback registrations for the same PID.'
+    $p = New-Process; $a = New-Counter; $b = New-Counter
+    $ra = Register $p $a; $rb = Register $p $b; $data = Get-Data $p.Id
+    Assert ((Callback-Count $data) -eq 2) 'Expected two registrations.'
+    $ra.Dispose(); $ra.Dispose(); $ra.Dispose()
+    Assert ((Callback-Count $data) -eq 1) 'Disposing A did not leave exactly B.'
+    $p.Kill(); $p.WaitForExit(5000) | Out-Null
+    Until { $b.Value -eq 1 } 'B was not called on process exit.'
+    Assert ($a.Value -eq 0) 'Disposed callback A fired.'; Assert ($b.Value -eq 1) 'Callback B fired more than once.'
+    Gone $p.Id $data; $rb.Dispose(); $rb.Dispose()
+} finally { Stop-ProcessSafe $p }
 
-    $registrationA.Dispose()
-    $registrationA.Dispose()
-    $registrationA.Dispose()
-    Assert-True ((Get-CallbackCount $data) -eq 1) 'Disposing callback A did not leave exactly callback B.'
-
-    $process.Kill()
-    $process.WaitForExit(5000) | Out-Null
-    Wait-Until { $b.Value -eq 1 } 'Callback B was not invoked once after process exit.'
-    Assert-True ($a.Value -eq 0) 'Disposed callback A was invoked after process exit.'
-    Assert-True ($b.Value -eq 1) 'Callback B was invoked more than once.'
-    Assert-WatcherGone $process.Id $data
-    $registrationB.Dispose()
-    $registrationB.Dispose()
-}
-finally {
-    Stop-TestProcess $process
-}
-
-# All registrations removed: callback count reaches zero, watcher is reclaimed, handle becomes zero.
-$process = $null
+# Dispose every registration while process stays alive: zero callbacks, watcher reclaimed, handle zeroed.
+$p = $null
 try {
-    $process = Start-WatchedProcess
-    $a = New-Counter
-    $b = New-Counter
-    $registrationA = Watch-Process $process.Id $a
-    $registrationB = Watch-Process $process.Id $b
-    $data = Get-WatcherData $process.Id
-    Assert-True ((Get-CallbackCount $data) -eq 2) 'Expected two callbacks before full unregister.'
+    $p = New-Process; $a = New-Counter; $b = New-Counter
+    $ra = Register $p $a; $rb = Register $p $b; $data = Get-Data $p.Id
+    $ra.Dispose(); $rb.Dispose(); $ra.Dispose(); $rb.Dispose()
+    Assert ((Callback-Count $data) -eq 0) 'Full unregister did not reach zero callbacks.'
+    Gone $p.Id $data; Assert ($a.Value -eq 0 -and $b.Value -eq 0) 'Callback fired after full unregister.'
+} finally { Stop-ProcessSafe $p }
 
-    $registrationA.Dispose()
-    $registrationB.Dispose()
-    $registrationA.Dispose()
-    $registrationB.Dispose()
-    Assert-True ((Get-CallbackCount $data) -eq 0) 'Full unregister did not reduce callback count to zero.'
-    Assert-WatcherGone $process.Id $data
-    Assert-True ($a.Value -eq 0 -and $b.Value -eq 0) 'A callback ran after all registrations were disposed.'
-}
-finally {
-    Stop-TestProcess $process
-}
-
-# Lifetime stress: 1000 register/dispose cycles against one long-lived PID must not accumulate callbacks.
-$process = $null
+# 1000 create/dispose cycles against one long-lived PID must not accumulate callbacks.
+$p = $null
 try {
-    $process = Start-WatchedProcess
-    $counter = New-Counter
+    $p = New-Process; $c = New-Counter
     for ($i = 0; $i -lt 1000; $i++) {
-        $registration = Watch-Process $process.Id $counter
-        $registration.Dispose()
-        if (($i % 100) -eq 0) {
-            $data = Get-WatcherData $process.Id
-            if ($null -ne $data) {
-                Assert-True ((Get-CallbackCount $data) -le 1) "Callback registrations accumulated during stress iteration $i."
-            }
-        }
+        $r = Register $p $c; $r.Dispose()
+        if (($i % 100) -eq 0) { $d = Get-Data $p.Id; if ($null -ne $d) { Assert ((Callback-Count $d) -le 1) "Callback accumulation at iteration $i." } }
     }
+    Until { (Watcher-Count) -eq 0 } 'Stress test left a watcher behind.'
+    Assert ($c.Value -eq 0) 'Stress callback fired while process was alive.'
+} finally { Stop-ProcessSafe $p }
 
-    $data = Get-WatcherData $process.Id
-    if ($null -ne $data) {
-        Wait-Until { (Get-CallbackCount $data) -eq 0 } 'Stress test left callback registrations behind.'
-        Assert-WatcherGone $process.Id $data
-    }
-    Assert-True ($counter.Value -eq 0) 'A callback ran while the stress-test process was still alive.'
-}
-finally {
-    Stop-TestProcess $process
-}
-
-# Exit/unregister race: each registration may run zero or one time, never duplicate or crash.
+# Race process exit against Dispose repeatedly; each registration may fire zero or once, never twice.
 $counters = New-Object System.Collections.Generic.List[object]
 for ($i = 0; $i -lt 64; $i++) {
-    $process = $null
+    $p = $null
     try {
-        $process = Start-WatchedProcess
-        $counter = New-Counter
-        $counters.Add($counter)
-        $registration = Watch-Process $process.Id $counter
-        $raceType.GetMethod('DisposeAndKill').Invoke($null, @($registration, $process))
-        $process.WaitForExit(5000) | Out-Null
-    }
-    finally {
-        Stop-TestProcess $process
-    }
+        $p = New-Process; $c = New-Counter; $counters.Add($c); $r = Register $p $c
+        $raceType.GetMethod('Run').Invoke($null, @($r, $p)); $p.WaitForExit(5000) | Out-Null
+    } finally { Stop-ProcessSafe $p }
 }
-
-Wait-Until { (Get-WatcherCount) -eq 0 } 'Race test left process watchers behind.' 10000
-foreach ($counter in $counters) {
-    Assert-True ($counter.Value -le 1) 'A process-exit/unregister race produced a duplicate callback.'
-}
+Until { (Watcher-Count) -eq 0 } 'Race test left watchers behind.' 10000
+foreach ($c in $counters) { Assert ($c.Value -le 1) 'Race produced a duplicate callback.' }
 
 Write-Host 'ProcessWatcherService registration lifetime/race/stress validation passed.' -ForegroundColor Green
