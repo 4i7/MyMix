@@ -19,7 +19,7 @@ MyMix is **not an official EarTrumpet release** and is not maintained, supported
 
 ## Download
 
-Validated standalone builds are intended to be published under **GitHub Releases** as `MyMix-x86.zip`, together with a SHA-256 checksum file. GitHub Actions build artifacts are intentionally not used for distribution.
+Validated standalone builds are published under **[GitHub Releases](https://github.com/4i7/MyMix/releases)**. Download `MyMix-x86.zip` and the `SHA256SUMS.txt` file from the same release. GitHub Actions build artifacts are intentionally not used for distribution.
 
 Release binaries are currently unsigned unless a separate code-signing process is added. Windows may therefore display an unknown-publisher or SmartScreen warning. Verify the downloaded archive against the checksum published with the same release before running it.
 
