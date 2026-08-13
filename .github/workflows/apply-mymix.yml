@@ -4,37 +4,24 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
   contents: write
 
 jobs:
   convert-build-commit:
     runs-on: self-hosted
     steps:
-      - name: Purge stored Actions artifacts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100,
-            });
-            for (const artifact of artifacts) {
-              await github.rest.actions.deleteArtifact({ owner: context.repo.owner, repo: context.repo.repo, artifact_id: artifact.id });
-            }
-            core.info(`Deleted ${artifacts.length} stored Actions artifact(s).`);
-
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: Set up NuGet
-        uses: NuGet/setup-nuget@v2
+        uses: NuGet/setup-nuget@d105a947828025cd7a980103c35ba2bfae586d0f # v2
+        with:
+          nuget-version: '7.9.0'
 
       - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
 
       - name: Convert source to MyMix
         shell: powershell
@@ -44,7 +31,7 @@ jobs:
         shell: powershell
         run: .\tools\Finalize-StandaloneMyMix.ps1
 
-      - name: Apply deep MyMix optimizer
+      - name: Apply deep MyMix optimizer and public hardening
         shell: powershell
         run: .\tools\Optimize-MyMix.ps1
 
@@ -77,6 +64,19 @@ jobs:
           msbuild .\EarTrumpet\MyMix.csproj /m /p:Configuration=Release /p:Platform=x86 /p:TargetFrameworkRootPath="$env:MYMIX_TARGET_FRAMEWORK_ROOT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Smoke test MyMix startup
+        shell: powershell
+        run: |
+          $env:MYMIX_MUTEX_SUFFIX = "ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $exe = (Resolve-Path '.\Build\Release\MyMix.exe').Path
+          $process = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru
+          if (-not $process.WaitForExit(15000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'MyMix smoke test did not exit within 15 seconds.'
+          }
+          if ($process.ExitCode -ne 0) { throw "MyMix smoke test exited with code $($process.ExitCode)." }
+          Write-Host 'MyMix startup smoke test passed.'
+
       - name: Remove ephemeral build output
         if: always()
         shell: powershell
@@ -96,7 +96,7 @@ jobs:
             Write-Host "No generated changes to commit."
           }
           else {
-            git commit -m "Apply validated optimized MyMix runtime"
+            git commit -m "Apply validated public-hardened MyMix runtime"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             git push
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
