@@ -113,6 +113,12 @@ jobs:
             throw 'MyMix smoke test did not exit within 15 seconds.'
           }
           if ($process.ExitCode -ne 0) {
+            Write-Host 'Recent managed/application crash events:'
+            $since = (Get-Date).AddMinutes(-2)
+            Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $since } -ErrorAction SilentlyContinue |
+              Where-Object { $_.ProviderName -in @('.NET Runtime', 'Application Error', 'Windows Error Reporting') -or $_.Message -match 'MyMix' } |
+              Select-Object -First 20 TimeCreated, ProviderName, Id, LevelDisplayName, Message |
+              Format-List | Out-String -Width 4096 | Write-Host
             throw "MyMix smoke test exited with code $($process.ExitCode)."
           }
           Write-Host 'MyMix startup smoke test passed.'
