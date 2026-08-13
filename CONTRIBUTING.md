@@ -1,34 +1,31 @@
-# Contributing to EarTrumpet
-Thanks for your interest in contributing to EarTrumpet!
+# Contributing to MyMix
 
-You can contribute to EarTrumpet with issues and pull requests (PRs). Simply filing issues for problems you encounter is a great way to contribute. Contributing code via the below workflow is greatly appreciated.
+MyMix is an independent derivative of EarTrumpet. Issues and pull requests in this repository should concern MyMix itself; they are not submissions to the EarTrumpet project.
 
-## Copyright
+## Before changing code
 
-EarTrumpet copyright is held by "Rafael Rivera, David Golden, David "Dave" Amenta, and Contributors".
+- Read `LICENSE` and preserve upstream copyright/license notices in inherited or substantially derived code.
+- Keep MyMix clearly identified as an unofficial derivative. Do not present the project as an official EarTrumpet release.
+- Preserve the privacy posture: no automatic telemetry, crash reporting, feedback upload, or hidden network reporting.
+- Avoid adding dependencies unless they provide clear value and have been reviewed for licensing, maintenance, security, runtime size, and startup cost.
+- Do not reintroduce removed add-on/extensibility or Store/MSIX infrastructure into the standalone core without a specific reviewed requirement.
 
-## Contribution Workflow
+## Development workflow
 
-Before contributing code, we require the following workflow:
+Create a branch from `main`, make the smallest coherent change, and run the MyMix transformation/validation path before opening a pull request. For changes to upstream-conversion logic, test a clean regeneration from the recorded EarTrumpet revision rather than only editing the generated source.
 
-1. Create an issue for your work or reuse an existing issue on the topic, if there is one.
+A distributable change should pass `tools\Test-MyMixRefactor.ps1`, Release/x86 compilation with warnings treated as errors, and the application startup smoke test on Windows. Changes to audio routing, hotkeys, tray behavior, DPI/theme behavior, device add/remove, or application-session movement should also receive relevant interactive testing.
 
-2. Get agreement from the team that your proposed change is OK. (You can alternatively email the `team@eartrumpet.app`.)
+## Generated source and transformation scripts
 
-3. Clearly state that you are going to take on the bug/enhancement work and we will assign the task to you.
+Much of the maintained behavior is expressed in `tools\Convert-ToMyMix.ps1`, `tools\Finalize-StandaloneMyMix.ps1`, and the staged optimizer under `tools\Optimize-MyMix`. When a generated-source fix is intended to survive future EarTrumpet imports, update the transformation stage as well as validating the resulting source.
 
-4. Create a fork of the repository on GitHub (if you don't already have one).
+Transformations should be fail-fast and assert their intended invariants. A changed upstream pattern should produce an obvious validation failure rather than a silently incomplete conversion.
 
-5. Create a branch from **dev** (`git checkout -b mybranch dev`).
+## Upstream fixes
 
-6. Name the branch so that it clearly communicates your intentions, such as issue-123 or feature-456.
+If a change fixes an issue that also exists in unmodified EarTrumpet and does not depend on MyMix-specific behavior, consider contributing an appropriate version of the fix to the upstream EarTrumpet project under its contribution process. Do not imply that MyMix maintainers speak for or represent the upstream project.
 
-7. Build the repository with your changes. Make sure that the builds are clean in all configurations (i.e. `Debug`, `Release`, and `VSDebug`).
+## Security and diagnostics
 
-8. Commit and push your changes to your fork.
-
-9. Create a pull request (PR) against our **dev** branch.
-
-    ℹ It is OK for your PR to include a large number of commits. We will squash them on merge.
-
-    ℹ It is also OK to create your PR as "[WIP]" before the implementation is done. This can be useful if you'd like to start the feedback process while you finish your implementation. State that this is the case in the initial PR comment.
+Do not place secrets, private keys, access tokens, private diagnostic dumps, machine-specific paths, or personal data in commits or public issues. Follow `SECURITY.md` for security-sensitive reports. Local diagnostic exports can contain application/device identifiers and paths; review and redact them before sharing.
