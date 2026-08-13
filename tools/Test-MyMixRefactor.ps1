@@ -113,7 +113,7 @@ foreach ($workflow in @('.github/workflows/apply-mymix.yml', '.github/workflows/
     Assert-Contains $workflow 'microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce'
     Assert-Contains $workflow 'Smoke test MyMix startup'
 }
-Assert-NotContains '.github/workflows/update-from-eartrumpet.yml' 'schedule:'
+Assert-NotMatches '.github/workflows/update-from-eartrumpet.yml' '(?m)^\s*schedule\s*:'
 Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'tools/Optimize-MyMix/**'
 Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b'
 
