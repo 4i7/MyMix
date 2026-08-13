@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\packages\GitVersionTask.5.5.1\build\GitVersionTask.props" Condition="Exists('..\packages\GitVersionTask.5.5.1\build\GitVersionTask.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
@@ -490,23 +489,54 @@
     <PreBuildEvent>
     </PreBuildEvent>
   </PropertyGroup>
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+  <!-- MyMix Roslyn satellite assemblies -->
+  <Target Name="GenerateSatelliteAssemblies"
+          Inputs="$(MSBuildAllProjects);@(_SatelliteAssemblyResourceInputs);$(IntermediateOutputPath)$(TargetName)$(TargetExt)"
+          Outputs="$(IntermediateOutputPath)%(Culture)\$(TargetName).resources.dll"
+          Condition="'@(_SatelliteAssemblyResourceInputs)' != ''">
+    <MakeDir Directories="@(_SatelliteAssemblyResourceInputs->'$(IntermediateOutputPath)%(Culture)')" />
     <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+      <_MyMixSatelliteAssemblyInfoFile>$(IntermediateOutputPath)%(_SatelliteAssemblyResourceInputs.Culture)\$(TargetName).resources.cs</_MyMixSatelliteAssemblyInfoFile>
+      <_MyMixSatelliteOutputAssembly>$(IntermediateOutputPath)%(_SatelliteAssemblyResourceInputs.Culture)\$(TargetName).resources.dll</_MyMixSatelliteOutputAssembly>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\GitVersionTask.5.5.1\build\GitVersionTask.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\GitVersionTask.5.5.1\build\GitVersionTask.props'))" />
-    <Error Condition="!Exists('..\packages\GitVersionTask.5.5.1\build\GitVersionTask.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\GitVersionTask.5.5.1\build\GitVersionTask.targets'))" />
-  </Target>
-  <!-- Versioning -->
-  <Target Name="BeforeBuild" DependsOnTargets="GetVersion">
-    <PropertyGroup Condition=" '$(Channel)'=='Store' ">
-      <ChannelVersion>$(GitVersion_MajorMinorPatch).0</ChannelVersion>
-    </PropertyGroup>
-    <PropertyGroup Condition=" '$(ChannelVersion)'=='' ">
-      <ChannelVersion>$(GitVersion_MajorMinorPatch).$(GitVersion_CommitsSinceVersionSource)</ChannelVersion>
-    </PropertyGroup>
-    <Message Text="GitVersion_InformationalVersion: $(GitVersion_InformationalVersion)" />
-    <Exec Command="powershell -executionpolicy Bypass -noprofile &quot;&amp; '$(ProjectDir)prebuild.ps1'&quot; $(ChannelVersion)" />
-  </Target>
-  <Import Project="..\packages\GitVersionTask.5.5.1\build\GitVersionTask.targets" Condition="Exists('..\packages\GitVersionTask.5.5.1\build\GitVersionTask.targets')" />
-</Project>
+    <ItemGroup>
+      <_MyMixSatelliteAttribute Remove="@(_MyMixSatelliteAttribute)" />
+      <_MyMixSatelliteAttribute Include="System.Reflection.AssemblyCultureAttribute">
+        <_Parameter1>%(_SatelliteAssemblyResourceInputs.Culture)</_Parameter1>
+      </_MyMixSatelliteAttribute>
+      <_MyMixSatelliteAttribute Include="System.Reflection.AssemblyVersionAttribute">
+        <_Parameter1>1.0.0.0</_Parameter1>
+      </_MyMixSatelliteAttribute>
+      <_MyMixSatelliteAttribute Include="System.Reflection.AssemblyFileVersionAttribute">
+        <_Parameter1>1.0.0.0</_Parameter1>
+      </_MyMixSatelliteAttribute>
+    </ItemGroup>
+    <WriteCodeFragment AssemblyAttributes="@(_MyMixSatelliteAttribute)" Language="C#" OutputFile="$(_MyMixSatelliteAssemblyInfoFile)">
+      <Output TaskParameter="OutputFile" ItemName="FileWrites" />
+    </WriteCodeFragment>
+    <ItemGroup>
+      <_MyMixSatelliteReferences Remove="@(_MyMixSatelliteReferences)" />
+      <_MyMixSatelliteReferences Include="@(ReferencePath)" Condition="'%(Filename)' == 'mscorlib' or '%(Filename)' == 'System.Runtime' or '%(Filename)' == 'netstandard'" />
+    </ItemGroup>
+    <Csc Resources="@(_SatelliteAssemblyResourceInputs)"
+         Sources="$(_MyMixSatelliteAssemblyInfoFile)"
+         OutputAssembly="$(_MyMixSatelliteOutputAssembly)"
+         References="@(_MyMixSatelliteReferences)"
+         KeyContainer="$(KeyContainerName)"
+         KeyFile="$(KeyOriginatorFile)"
+         NoConfig="true"
+         NoLogo="$(NoLogo)"
+         NoStandardLib="$(NoCompilerStandardLib)"
+         Optimize="$(Optimize)"
+         DelaySign="$(DelaySign)"
+         Deterministic="$(Deterministic)"
+         DisabledWarnings="$(DisabledWarnings)"
+         WarningLevel="$(WarningLevel)"
+         WarningsAsErrors="$(WarningsAsErrors)"
+         TargetType="Library"
+         ToolExe="$(CscToolExe)"
+         ToolPath="$(CscToolPath)"
+         UseSharedCompilation="$(UseSharedCompilation)">
+      <Output TaskParameter="OutputAssembly" ItemName="FileWrites" />
+    </Csc>
+  </Target></Project>
