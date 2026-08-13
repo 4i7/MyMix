@@ -19,7 +19,6 @@ function Assert-NotMatches([string]$Path, [string]$Pattern) { if ((ReadRepo $Pat
 function Assert-PathMissing([string]$Path) { if (Test-Path -LiteralPath (RepoPath $Path)) { $Failures.Add("Path should be removed: $Path") } }
 function Assert-PathExists([string]$Path) { if (-not (Test-Path -LiteralPath (RepoPath $Path))) { $Failures.Add("Required path missing: $Path") } }
 
-# Baseline transform invariants. These run both during Convert-ToMyMix and after optimization.
 Assert-Contains 'EarTrumpet/UI/Views/AppItemView.xaml' 'Margin="0,0,16,0"'
 Assert-Contains 'EarTrumpet/UI/Views/DeviceView.xaml' 'Margin="0,0,16,0"'
 Assert-NotContains 'EarTrumpet/UI/Views/AppItemView.xaml' 'Grid.Column="2" Text="{Binding Volume'
@@ -52,8 +51,8 @@ if ($Optimized) {
     Assert-Contains $peaks '_deviceManager.UpdatePeakValues();'
     Assert-Contains $peaks '_deviceManager.UpdatePeakValues(Default.Id)'
     Assert-Contains $peaks 'foreach (var device in AllDevices)'
-    Assert-NotMatches $peaks '(?ms)private void UpdatePeakValuesForVisibleSurfaces\(\).*?if \(ShouldSampleAllPeakDevices\).*?\{\s*UpdatePeakValuesForVisibleSurfaces\(\);'
-    Assert-NotMatches $peaks '(?ms)private void UpdatePeakForegroundForVisibleSurfaces\(\).*?if \(ShouldSampleAllPeakDevices\).*?\{\s*UpdatePeakForegroundForVisibleSurfaces\(\);'
+    Assert-NotMatches $peaks '(?ms)private void UpdatePeakValuesForVisibleSurfaces\(\)\s*\{\s*if \(ShouldSampleAllPeakDevices\)\s*\{\s*UpdatePeakValuesForVisibleSurfaces\(\);'
+    Assert-NotMatches $peaks '(?ms)private void UpdatePeakForegroundForVisibleSurfaces\(\)\s*\{\s*if \(ShouldSampleAllPeakDevices\)\s*\{\s*UpdatePeakForegroundForVisibleSurfaces\(\);'
     Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'meter.GetPeakValue()'
     Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'AllocHGlobal'
     Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'GetChannelsPeakValues'
@@ -101,8 +100,6 @@ else {
     Assert-NotContains 'EarTrumpet/App.xaml.cs' 'AddonManager.Host'
 }
 
-# Public CI policy: no Actions artifact/cache storage, no artifact-delete permission, no automatic
-# upstream schedule on the persistent self-hosted runner, and third-party actions pinned by SHA.
 foreach ($workflow in @('.github/workflows/apply-mymix.yml', '.github/workflows/update-from-eartrumpet.yml')) {
     Assert-NotContains $workflow 'actions/upload-artifact'
     Assert-NotContains $workflow 'actions/cache'
