@@ -59,26 +59,37 @@ Assert-NotContains 'EarTrumpet/UI/ViewModels/EarTrumpetAboutPageViewModel.cs' 'F
 
 $Optimized = Test-Path -LiteralPath (RepoPath '.mymix-optimized')
 if ($Optimized) {
-    # The optimizer removes obsolete runtime switches entirely.
     foreach ($name in @('UseLegacyIcon', 'IsTelemetryEnabled', 'UseLogarithmicVolume', 'HasShownFirstRun')) {
         Assert-NotContains 'EarTrumpet/AppSettings.cs' $name
     }
 
-    # Peak meter: keep a fixed 30 FPS target, but aggregate one Core Audio meter read per stream,
-    # coalesce render work, and smooth release without per-frame unmanaged/managed arrays.
+    # Peak meter remains a fixed 30 FPS experience. Work is reduced by aggregate Core Audio reads,
+    # visible-device scoping, one peak binding per stream, cached topology snapshots, stale-frame
+    # dropping, and cheap release smoothing rather than by lowering the requested frame rate.
     Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'new Timer(1000.0 / 30.0)'
     Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'DispatcherPriority.Render'
-    Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'Interlocked.Exchange(ref _peakUiUpdatePending, 1)'
+    Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'System.Threading.Interlocked.Exchange(ref _peakUpdateRunning, 1)'
+    Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'ShouldSampleAllPeakDevices'
+    Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' '_deviceManager.UpdatePeakValues(Default.Id)'
+    Assert-NotContains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'using System.Threading;'
     Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'meter.GetPeakValue()'
     Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'AllocHGlobal'
     Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'GetChannelsPeakValues'
     Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'PeakReleaseFactor = 0.72f'
     Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 's_peakValue1Changed'
+    Assert-NotContains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'PeakValue2'
     Assert-Contains 'EarTrumpet/UI/Controls/VolumeSlider.cs' 'OnPeakValue1Changed'
+    Assert-NotContains 'EarTrumpet/UI/Controls/VolumeSlider.cs' 'PeakValue2'
+    Assert-NotContains 'EarTrumpet/UI/Views/AppItemView.xaml' 'PeakValue2'
+    Assert-NotContains 'EarTrumpet/UI/Views/DeviceView.xaml' 'PeakValue2'
 
-    # Runtime/output trimming.
-    Assert-Contains '.mymix-optimized' 'version=2'
-    Assert-Contains '.mymix-optimized' 'peak_meter=30fps-aggregate-smoothed'
+    # Runtime/output trimming and hot paths.
+    Assert-Contains '.mymix-optimized' 'version=3'
+    Assert-Contains '.mymix-optimized' 'peak_meter=30fps-visible-aggregate-smoothed-single-binding'
+    Assert-Contains '.mymix-optimized' 'vm_lifetime=explicit-dispose'
+    Assert-Contains '.mymix-optimized' 'icon_cache=bounded-frozen'
+    Assert-Contains '.mymix-optimized' 'appinfo_cache=per-process'
+    Assert-Contains '.mymix-optimized' 'audio_callbacks=coalesced'
     Assert-Contains 'EarTrumpet/MyMix.csproj' '<DefineConstants>X86</DefineConstants>'
     Assert-Contains 'EarTrumpet/MyMix.csproj' '<DebugType>none</DebugType>'
     foreach ($needle in @('Newtonsoft.Json', 'XamlAnimatedGif', 'System.ComponentModel.Composition', 'Addons\', 'Extensibility\', 'CircularBufferTraceListener.cs', 'FilteredCollectionChain.cs', 'AudioDeviceChannelCollection.cs')) {
@@ -94,12 +105,27 @@ if ($Optimized) {
     Assert-Contains 'EarTrumpet/AppSettings.cs' 'Runtime reads are memory-only'
     Assert-NotContains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'Default.Volume}%'
     Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'MyMix: '
+    Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'public virtual void Dispose()'
+    Assert-Contains 'EarTrumpet/UI/ViewModels/AppItemViewModel.cs' 'public override void Dispose()'
+    Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceViewModel.cs' 'public override void Dispose()'
+    Assert-NotContains 'EarTrumpet/UI/ViewModels/AppItemViewModel.cs' '~AppItemViewModel'
+    Assert-NotContains 'EarTrumpet/UI/ViewModels/DeviceViewModel.cs' '~DeviceViewModel'
+    Assert-Contains 'EarTrumpet/UI/Controls/ImageEx.cs' 'ConcurrentDictionary<string, ImageSource>'
+    Assert-Contains 'EarTrumpet/UI/Controls/ImageEx.cs' 'image.Freeze()'
+    Assert-Contains 'EarTrumpet/DataModel/AppInformation/AppInformationFactory.cs' 'ConcurrentDictionary<int, Lazy<IAppInfo>>'
+    Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDevice.cs' 'QueueVolumeUiUpdate();'
+    Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSession.cs' 'QueueVolumeUiUpdate();'
+    Assert-NotContains 'EarTrumpet/MyMix.csproj' 'Logo-Dark.png'
+    Assert-NotContains 'EarTrumpet/MyMix.csproj' 'Logo-Light.png'
 
-    foreach ($path in @('EarTrumpet/Addons', 'EarTrumpet/Extensibility', 'EarTrumpet.ColorTool', 'EarTrumpet.Package', '.chocolatey', 'EarTrumpet/Assets/Welcome.gif')) {
+    foreach ($path in @(
+        'EarTrumpet/Addons', 'EarTrumpet/Extensibility', 'EarTrumpet.ColorTool', 'EarTrumpet.Package', '.chocolatey',
+        'EarTrumpet/Assets/Welcome.gif', 'EarTrumpet/Assets/Logo-Dark.png', 'EarTrumpet/Assets/Logo-Light.png'
+    )) {
         Assert-PathMissing $path
     }
 
-    # Neutral English + Japanese only. Any other satellite resource means updater drifted.
+    # Neutral English + Japanese only.
     $localized = @(Get-ChildItem -LiteralPath (RepoPath 'EarTrumpet/Properties') -Filter 'Resources.*.resx' -File | Select-Object -ExpandProperty Name)
     foreach ($name in $localized) {
         if ($name -ne 'Resources.ja-JP.resx') {
@@ -118,7 +144,7 @@ else {
     Assert-NotContains 'EarTrumpet/App.xaml.cs' 'AddonManager.Host'
 }
 
-# GitHub Actions artifact quota: uploads and GitHub-hosted caches are forbidden in either phase.
+# Artifact/caching invariant: GitHub-hosted artifact storage is never used by MyMix workflows.
 foreach ($workflow in @('.github/workflows/apply-mymix.yml', '.github/workflows/update-from-eartrumpet.yml')) {
     Assert-NotContains $workflow 'actions/upload-artifact'
     Assert-NotContains $workflow 'actions/cache'
