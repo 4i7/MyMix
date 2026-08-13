@@ -15,7 +15,12 @@ Remove-Path 'EarTrumpet/Assets/Icon-Dark.ico'
 
 $appXamlPath = 'EarTrumpet/App.xaml'
 $appXaml = Read-Text $appXamlPath
-$appXaml = [regex]::Replace($appXaml, '\s*<bcl:String\s+x:Key="EarTrumpetIcon(?:Light|Dark)">[^<]*</bcl:String>', '')
+# Remove both the icon resource declarations and every style reference to them. Removing only
+# the declarations leaves DialogWindowStyle pointing at missing StaticResource keys and also
+# violates the public-hardening invariant that no inherited EarTrumpet icon key remains.
+$appXaml = [regex]::Replace($appXaml, '(?m)^\s*<bcl:String\s+x:Key="EarTrumpetIcon(?:Light|Dark)">[^<]*</bcl:String>\r?\n?', '')
+$appXaml = [regex]::Replace($appXaml, '(?m)^\s*<Setter\s+Property="Icon"\s+Value="\{Binding Source=\{StaticResource EarTrumpetIconLight\}\}"\s*/>\r?\n?', '')
+$appXaml = [regex]::Replace($appXaml, '(?ms)^\s*<DataTrigger\s+Binding="\{Binding Source=\{StaticResource ThemeManager\}, Path=IsSystemLightTheme\}"\s+Value="False">\s*<Setter\s+Property="Icon"\s+Value="\{Binding Source=\{StaticResource EarTrumpetIconDark\}\}"\s*/>\s*</DataTrigger>\r?\n?', '')
 Write-Text $appXamlPath $appXaml
 
 Write-Text 'EarTrumpet/UI/Helpers/TaskbarIconSource.cs' @'
