@@ -85,3 +85,5 @@ jobs:
           else {
             Write-Warning "Desktop Bridge build tools are not installed; package-project validation is skipped. Install the Visual Studio WinUI/UWP application development build tools to enable it."
           }
+
+# Retry marker: reference assemblies are restored from NuGet for net462.
