@@ -82,3 +82,5 @@ jobs:
         run: |
           msbuild .\EarTrumpet\MyMix.csproj /m /p:Configuration=Release /p:Platform=x86 /p:TargetFrameworkRootPath="$env:MYMIX_TARGET_FRAMEWORK_ROOT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# Retry after removing the final Windows.Globalization dependency.
