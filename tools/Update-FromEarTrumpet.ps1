@@ -14,6 +14,7 @@ $Marker = Join-Path $Root '.mymix-converted'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $TempBase = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
 $UpstreamWorktree = Join-Path $TempBase ('mymix-eartrumpet-' + [Guid]::NewGuid().ToString('N'))
+$CurrentMarkerText = if (Test-Path -LiteralPath $Marker) { [IO.File]::ReadAllText($Marker) } else { $null }
 
 function Write-WorkflowOutput([string]$Name, [string]$Value) {
     if ($env:GITHUB_OUTPUT) {
@@ -38,12 +39,11 @@ function Invoke-GitCapture([string[]]$Arguments) {
 }
 
 function Get-CurrentUpstreamSha {
-    if (-not (Test-Path -LiteralPath $Marker)) {
+    if (-not $CurrentMarkerText) {
         return $null
     }
 
-    $text = [IO.File]::ReadAllText($Marker)
-    $match = [regex]::Match($text, '(?m)^upstream=File-New-Project/EarTrumpet@([0-9a-fA-F]{40})\s*$')
+    $match = [regex]::Match($CurrentMarkerText, '(?m)^upstream=File-New-Project/EarTrumpet@([0-9a-fA-F]{40})\s*$')
     if ($match.Success) {
         return $match.Groups[1].Value.ToLowerInvariant()
     }
@@ -74,6 +74,20 @@ function Copy-UpstreamIntoRepository {
     }
 }
 
+function Ensure-MyMixBuildMetadata {
+    $packagesPath = Join-Path $Root 'EarTrumpet/packages.config'
+    $packages = [IO.File]::ReadAllText($packagesPath)
+
+    if ($packages -notmatch '<package id="Microsoft\.NETFramework\.ReferenceAssemblies"') {
+        $entry = '  <package id="Microsoft.NETFramework.ReferenceAssemblies" version="1.0.3" developmentDependency="true" />'
+        if (-not $packages.Contains('</packages>')) {
+            throw 'Closing packages element was not found in EarTrumpet/packages.config.'
+        }
+        $packages = $packages.Replace('</packages>', $entry + "`r`n</packages>")
+        [IO.File]::WriteAllText($packagesPath, $packages, $Utf8NoBom)
+    }
+}
+
 try {
     New-Item -ItemType Directory -Path $UpstreamWorktree -Force | Out-Null
     Invoke-Git @('-C', $UpstreamWorktree, 'init', '--quiet')
@@ -85,6 +99,7 @@ try {
     $upstreamSha = $upstreamSha.ToLowerInvariant()
     $upstreamShort = $upstreamSha.Substring(0, 12)
     $currentSha = Get-CurrentUpstreamSha
+    $upstreamChanged = $currentSha -ne $upstreamSha
 
     Write-Host "Current MyMix upstream: $currentSha"
     Write-Host "Requested EarTrumpet upstream: $upstreamSha ($UpstreamRef)"
@@ -92,8 +107,9 @@ try {
     Write-WorkflowOutput 'upstream_sha' $upstreamSha
     Write-WorkflowOutput 'upstream_short' $upstreamShort
     Write-WorkflowOutput 'upstream_ref' $UpstreamRef
+    Write-WorkflowOutput 'upstream_changed' ($(if ($upstreamChanged) { 'true' } else { 'false' }))
 
-    if (-not $Force -and $currentSha -eq $upstreamSha) {
+    if (-not $Force -and -not $upstreamChanged) {
         Write-Host 'MyMix already contains this EarTrumpet upstream commit.'
         Write-WorkflowOutput 'changed' 'false'
         exit 0
@@ -107,12 +123,21 @@ try {
     $finalizer = Join-Path $PSScriptRoot 'Finalize-StandaloneMyMix.ps1'
     & $finalizer
 
-    $markerText = @(
-        "upstream=File-New-Project/EarTrumpet@$upstreamSha"
-        "upstream_ref=$UpstreamRef"
-        "converted=$(Get-Date -Format o)"
-    ) -join "`n"
-    [IO.File]::WriteAllText($Marker, $markerText + "`n", $Utf8NoBom)
+    Ensure-MyMixBuildMetadata
+
+    if (-not $upstreamChanged -and $CurrentMarkerText) {
+        # Maintenance pushes force a full clean regeneration to test the transform. Restore the
+        # existing marker so a same-upstream validation does not create a meaningless diff.
+        [IO.File]::WriteAllText($Marker, $CurrentMarkerText, $Utf8NoBom)
+    }
+    else {
+        $markerText = @(
+            "upstream=File-New-Project/EarTrumpet@$upstreamSha"
+            "upstream_ref=$UpstreamRef"
+            "converted=$(Get-Date -Format o)"
+        ) -join "`n"
+        [IO.File]::WriteAllText($Marker, $markerText + "`n", $Utf8NoBom)
+    }
 
     $validator = Join-Path $PSScriptRoot 'Test-MyMixRefactor.ps1'
     & $validator
