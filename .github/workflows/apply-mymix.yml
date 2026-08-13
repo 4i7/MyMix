@@ -32,6 +32,10 @@ jobs:
         shell: powershell
         run: .\tools\Convert-ToMyMix.ps1 -SkipBuild
 
+      - name: Finalize standalone MyMix runtime
+        shell: powershell
+        run: .\tools\Finalize-StandaloneMyMix.ps1
+
       - name: Commit converted source
         shell: powershell
         run: |
@@ -43,7 +47,7 @@ jobs:
             Write-Host "No generated changes to commit."
           }
           else {
-            git commit -m "Apply MyMix refactor to EarTrumpet source"
+            git commit -m "Finalize standalone MyMix runtime"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             git push
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -78,17 +82,3 @@ jobs:
         run: |
           msbuild .\EarTrumpet\MyMix.csproj /m /p:Configuration=Release /p:Platform=x86 /p:TargetFrameworkRootPath="$env:MYMIX_TARGET_FRAMEWORK_ROOT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Validate package project when Desktop Bridge build tools are installed
-        shell: powershell
-        run: |
-          $vswhere = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe"
-          $installPath = & $vswhere -products * -requires Microsoft.Component.MSBuild -property installationPath -latest
-          $desktopBridge = Join-Path $installPath 'MSBuild\Microsoft\DesktopBridge\Microsoft.DesktopBridge.props'
-          if (Test-Path $desktopBridge) {
-            msbuild .\EarTrumpet.Package\MyMix.Package.wapproj /m /p:Configuration=Release /p:Platform=x86 /p:TargetFrameworkRootPath="$env:MYMIX_TARGET_FRAMEWORK_ROOT"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-          else {
-            Write-Warning "Desktop Bridge build tools are not installed; package-project validation is skipped. Install the Visual Studio WinUI/UWP application development build tools to enable it."
-          }
