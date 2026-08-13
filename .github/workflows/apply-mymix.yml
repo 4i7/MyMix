@@ -68,6 +68,10 @@ jobs:
           msbuild .\EarTrumpet\MyMix.csproj /m /p:Configuration=Release /p:Platform=x86 /p:TargetFrameworkRootPath="$env:MYMIX_TARGET_FRAMEWORK_ROOT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Validate process watcher registration lifetime
+        shell: powershell
+        run: .\tools\Test-ProcessWatcherLifetime.ps1
+
       - name: Smoke test MyMix startup
         shell: powershell
         run: .\tools\Smoke-TestMyMix.ps1
