@@ -17,13 +17,16 @@ on:
     branches:
       - main
     paths:
+      - .github/workflows/apply-mymix.yml
       - .github/workflows/update-from-eartrumpet.yml
+      - .github/workflows/release.yml
       - tools/Update-FromEarTrumpet.ps1
       - tools/Convert-ToMyMix.ps1
       - tools/Finalize-StandaloneMyMix.ps1
       - tools/Optimize-MyMix.ps1
       - tools/Optimize-MyMix/**
       - tools/Test-MyMixRefactor.ps1
+      - tools/Smoke-TestMyMix.ps1
 
 # Deliberately no schedule: a newly changed upstream revision must not be compiled automatically
 # on a persistent self-hosted machine merely because upstream changed.
@@ -32,7 +35,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: mymix-eartrumpet-upstream
+  group: mymix-source-maintenance
   cancel-in-progress: false
 
 jobs:
@@ -44,17 +47,17 @@ jobs:
 
     steps:
       - name: Checkout MyMix
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up NuGet
-        uses: NuGet/setup-nuget@d105a947828025cd7a980103c35ba2bfae586d0f # v2
+        uses: NuGet/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
         with:
           nuget-version: '7.9.0'
 
       - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
       - name: Import EarTrumpet and reapply MyMix patch
         id: sync
@@ -104,24 +107,7 @@ jobs:
         id: smoke
         if: steps.sync.outputs.changed == 'true'
         shell: powershell
-        run: |
-          $env:MYMIX_MUTEX_SUFFIX = "ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
-          $exe = (Resolve-Path '.\Build\Release\MyMix.exe').Path
-          $process = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru
-          if (-not $process.WaitForExit(15000)) {
-            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            throw 'MyMix smoke test did not exit within 15 seconds.'
-          }
-          if ($process.ExitCode -ne 0) {
-            Write-Host 'Recent managed/application crash events:'
-            $since = (Get-Date).AddMinutes(-2)
-            Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $since } -ErrorAction SilentlyContinue |
-              Where-Object { $_.ProviderName -in @('.NET Runtime', 'Application Error', 'Windows Error Reporting') -or $_.Message -match 'MyMix' } |
-              Select-Object -First 20 TimeCreated, ProviderName, Id, LevelDisplayName, Message |
-              Format-List | Out-String -Width 4096 | Write-Host
-            throw "MyMix smoke test exited with code $($process.ExitCode)."
-          }
-          Write-Host 'MyMix startup smoke test passed.'
+        run: .\tools\Smoke-TestMyMix.ps1
 
       - name: Remove build-only files
         if: always() && steps.sync.outputs.changed == 'true'
@@ -172,7 +158,7 @@ jobs:
         if: steps.sync.outputs.upstream_changed == 'true'
         id: pr
         continue-on-error: true
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           UPDATE_BRANCH: ${{ steps.publish.outputs.branch }}
           UPSTREAM_SHA: ${{ steps.sync.outputs.upstream_sha }}
