@@ -1,8 +1,7 @@
 # Final stability pass after the feature/size optimizers.
 # Keep this stage deliberately small: remove transform overlap and replace the inherited
-# process watcher implementation whose WaitForMultipleObjects design has a hard handle-count
-# ceiling. A single low-frequency polling thread is simpler and remains responsive enough for
-# removing audio sessions after their owning process exits.
+# multi-handle wait design with scalable single-handle polling. A single low-frequency
+# background thread remains responsive enough for removing audio sessions after process exit.
 
 $deviceCollectionPath = 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs'
 $deviceCollection = Read-Text $deviceCollectionPath
@@ -20,10 +19,9 @@ using System.Threading;
 
 namespace EarTrumpet.DataModel
 {
-    // Tracks process lifetime for audio-session metadata. The inherited implementation used
-    // WaitForMultipleObjects over every process handle, which has a fixed Windows handle-count
-    // limit. MyMix polls each process handle from one background thread instead: no hard batch
-    // limit, no per-process worker thread, and sub-second cleanup latency.
+    // Tracks process lifetime for audio-session metadata. MyMix polls each process handle from
+    // one background thread: no hard batch limit, no per-process worker thread, and sub-second
+    // cleanup latency.
     public class ProcessWatcherService
     {
         private sealed class ProcessWatcherData
@@ -159,8 +157,8 @@ namespace EarTrumpet.DataModel
 }
 '@
 
-Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForMultipleObjects'
-Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForSingleObject(data.ProcessHandle, 0)'
+Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Kernel32.WaitForMultipleObjects('
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Kernel32.WaitForSingleObject(data.ProcessHandle, 0)'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'PollIntervalMilliseconds = 500'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'callback failed'
 Assert-NotContains $deviceCollectionPath "AllDevices[i].Dispose();`r`n                     for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();"
