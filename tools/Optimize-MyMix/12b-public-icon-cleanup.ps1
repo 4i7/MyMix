@@ -1,11 +1,14 @@
-# Remove inherited application-icon resources and their style references without rewriting
-# unrelated XAML. Stage 13 repeats the same cleanup defensively and owns the runtime fallback.
+# Remove inherited application-icon resource declarations/references without touching any
+# surrounding XAML structure. An empty theme DataTrigger is harmless; deleting its individual
+# icon setter line is safer than a multiline regex that could consume unrelated XAML.
 $appXamlPath = 'EarTrumpet/App.xaml'
-$appXaml = Read-Text $appXamlPath
-$appXaml = [regex]::Replace($appXaml, '(?m)^\s*<bcl:String\s+x:Key="EarTrumpetIcon(?:Light|Dark)">[^<]*</bcl:String>\r?\n?', '')
-$appXaml = [regex]::Replace($appXaml, '(?m)^\s*<Setter\s+Property="Icon"\s+Value="\{Binding Source=\{StaticResource EarTrumpetIconLight\}\}"\s*/>\r?\n?', '')
-$appXaml = [regex]::Replace($appXaml, '(?ms)^\s*<DataTrigger\s+Binding="\{Binding Source=\{StaticResource ThemeManager\}, Path=IsSystemLightTheme\}"\s+Value="False">\s*<Setter\s+Property="Icon"\s+Value="\{Binding Source=\{StaticResource EarTrumpetIconDark\}\}"\s*/>\s*</DataTrigger>\r?\n?', '')
+$appXamlLines = (Read-Text $appXamlPath) -split '\r?\n'
+$appXamlLines = @($appXamlLines | Where-Object { $_ -notmatch 'EarTrumpetIcon(?:Light|Dark)' })
+$appXaml = (($appXamlLines -join "`r`n").TrimEnd() + "`r`n")
 Write-Text $appXamlPath $appXaml
 
+Assert-Contains $appXamlPath '<Application x:Class="EarTrumpet.App"'
+Assert-Contains $appXamlPath '<Application.Resources>'
+Assert-Contains $appXamlPath '</Application>'
 Assert-NotContains $appXamlPath 'EarTrumpetIconLight'
 Assert-NotContains $appXamlPath 'EarTrumpetIconDark'
