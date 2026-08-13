@@ -123,7 +123,7 @@ namespace EarTrumpet.UI.ViewModels
                     break;
 
                 case NotifyCollectionChangedAction.Reset:
-                    for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();
+                   for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();
                     AllDevices.Clear();
                     foreach (var device in _deviceManager.Devices)
                     {
@@ -164,7 +164,6 @@ namespace EarTrumpet.UI.ViewModels
                 Default?.UpdatePeakValueForeground();
             }
         }
-
         private void PeakMeterTimer_Elapsed(object sender, ElapsedEventArgs e)
         {
             // Never overlap Core Audio sampling if one frame takes longer than 33 ms.
@@ -202,6 +201,7 @@ namespace EarTrumpet.UI.ViewModels
 
         public void MoveAppToDevice(IAppItemViewModel app, DeviceViewModel dev)
         {
+            // Collect all matching apps on all devices.
             var apps = new List<IAppItemViewModel>();
             apps.Add(app);
 
@@ -225,6 +225,7 @@ namespace EarTrumpet.UI.ViewModels
                 MoveAppToDeviceInternal(foundApp, dev);
             }
 
+            // Collect and move any hidden/moved sessions.
             ((IAudioDeviceManagerWindowsAudio)_deviceManager).MoveHiddenAppsToDevice(app.AppId, dev?.Id);
         }
 
@@ -254,7 +255,7 @@ namespace EarTrumpet.UI.ViewModels
                 {
                     oldDevice.AppLeavingFromThisDevice(app);
                     newDevice.AppMovingToThisDevice(tempApp);
-                    tempApp = null;
+                    tempApp = null; // destination now owns it, or already disposed it as a duplicate
                 }
             }
             catch (Exception ex)
@@ -314,6 +315,8 @@ namespace EarTrumpet.UI.ViewModels
             }
             deviceName = deviceName ?? string.Empty;
 
+            // MyMix intentionally avoids numeric volume text; the tray only updates when the
+            // mute/icon bucket or device identity changes, not for every slider tick.
             var stateText = Default.IsMuted ? $"{Properties.Resources.MutedText} - " : string.Empty;
             var prefixText = $"MyMix: {stateText}";
             var maxDeviceNameLength = Math.Max(0, 63 - prefixText.Length);

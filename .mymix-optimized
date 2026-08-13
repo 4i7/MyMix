@@ -9,4 +9,4 @@ icon_cache=bounded-frozen
 appinfo_cache=per-process
 audio_callbacks=coalesced
 public_hardening=unbranded-icons-safe-finalizer-smoke-test
-process_watcher=scalable-single-thread-polling
+process_watcher=scalable-single-thread-polling-disposable-registrations
