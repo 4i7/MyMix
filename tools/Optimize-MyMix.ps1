@@ -59,7 +59,7 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/13-public-hardening.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/14-runtime-stability.ps1')
 
-Write-Text '.mymix-optimized' "version=4`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`nprocess_watcher=scalable-single-thread-polling`n"
+Write-Text '.mymix-optimized' "version=4`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`nprocess_watcher=scalable-single-thread-polling-disposable-registrations`n"
 
 # Final invariants. These are deliberately behavioral, not just file-existence checks.
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'new Timer(1000.0 / 30.0)'
@@ -69,6 +69,8 @@ Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'ShouldS
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' '_deviceManager.UpdatePeakValues();'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' '_deviceManager.UpdatePeakValues(Default.Id)'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'foreach (var device in AllDevices)'
+Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'TemporaryAppItemViewModel tempApp = null;'
+Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'tempApp?.Dispose();'
 Assert-NotContains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'using System.Threading;'
 Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'meter.GetPeakValue()'
 Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'AllocHGlobal'
@@ -76,9 +78,13 @@ Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'PeakRelease
 Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'public virtual void Dispose()'
 Assert-NotContains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'PeakValue2'
 Assert-NotContains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' 'PeakValue2'
+Assert-Contains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' 'IAppItemViewModel, IDisposable'
+Assert-Contains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' '_processWatchRegistrations'
+Assert-Contains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' 'Interlocked.Exchange(ref _disposed, 1)'
 Assert-Contains 'EarTrumpet/UI/Controls/VolumeSlider.cs' 'OnPeakValue1Changed'
 Assert-NotContains 'EarTrumpet/UI/Controls/VolumeSlider.cs' 'PeakValue2'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceViewModel.cs' 'public override void Dispose()'
+Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceViewModel.cs' 'temporaryApp.Dispose();'
 Assert-Contains 'EarTrumpet/UI/Controls/ImageEx.cs' 'ConcurrentDictionary<string, ImageSource>'
 Assert-Contains 'EarTrumpet/UI/Controls/ImageEx.cs' 'image.Freeze()'
 Assert-Contains 'EarTrumpet/DataModel/AppInformation/AppInformationFactory.cs' 'ConcurrentDictionary<int, Lazy<IAppInfo>>'
@@ -113,6 +119,10 @@ Assert-NotContains 'EarTrumpet/UI/Helpers/TaskbarIconSource.cs' 'IconKind.EarTru
 Assert-Contains 'EarTrumpet/Interop/Helpers/SingleInstanceAppMutex.cs' 'MYMIX_MUTEX_SUFFIX'
 Assert-NotContains 'EarTrumpet/UI/ViewModels/EarTrumpetAboutPageViewModel.cs' 'intentional local diagnostic crash'
 Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Kernel32.WaitForMultipleObjects('
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'public static IDisposable WatchProcess'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'UnwatchProcess'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'public bool Cancelled;'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'CloseWatcherHandle(data);'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'PollIntervalMilliseconds = 500'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'callback failed'
 
