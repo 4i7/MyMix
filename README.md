@@ -1,34 +1,25 @@
 # MyMix
 
-MyMix is a private Windows volume mixer derived from EarTrumpet. The fork is intentionally narrowed to a lightweight, logarithmic-only mixer experience.
+MyMix is a private Windows volume mixer derived from EarTrumpet and optimized around a single logarithmic volume-control path.
 
-## Conversion
+## MyMix changes
 
-The repository currently contains the upstream `EarTrumpet-master.zip` source snapshot. Run the following once from a Windows PowerShell or Visual Studio Developer PowerShell:
+- Removes the numeric volume labels at the right side of device/app rows and gives that width back to the slider with a 16 px right inset.
+- Uses logarithmic volume mapping unconditionally; the linear/logarithmic runtime branch and settings toggle are no longer part of the hot path.
+- Removes outbound Bugsnag crash reporting and the EarTrumpet feedback/telemetry UI. Diagnostics are local-only.
+- Removes the legacy EarTrumpet-icon selection feature from the tray-icon path.
+- Disables add-on-host startup and removes community/legacy settings pages from the core experience.
+- Uses a separate MyMix assembly name, package identity, startup task, mutex identity (via assembly name), and unpackaged registry key.
+- Keeps upstream internal namespaces where renaming them would add risk without changing the product identity.
 
-```powershell
-.\tools\Convert-ToMyMix.ps1
-```
+## Build
 
-The converter expands the upstream source into the repository, applies the MyMix refactor, removes the source ZIP unless `-KeepArchive` is supplied, validates the result, restores packages when `nuget.exe` is available, and builds `Release|x86` when `msbuild.exe` is available.
-
-After conversion the main solution is `MyMix.sln` and the application project is `EarTrumpet\MyMix.csproj`.
-
-## Refactor scope
-
-- Right-side device/app numeric volume labels are removed. Their reserved column is deleted and the slider receives the reclaimed width with a 16 px right inset.
-- Logarithmic volume mapping is unconditional. The runtime linear/logarithmic branch is removed from the real and mock audio paths, and the conversion math avoids recomputing the curve scale.
-- Bugsnag reporting, its configuration, and its NuGet references are removed. Diagnostics remain local-only.
-- EarTrumpet feedback/telemetry UI is removed from the active MyMix settings experience.
-- The legacy EarTrumpet icon selection setting is disabled and removed from the tray-icon hot path.
-- Add-on-host startup and add-on menu/settings integration are disabled for the lean core runtime.
-- MyMix uses a separate assembly name, package identity, startup task, mutex identity (through the assembly name), and unpackaged registry key.
-- Internal `EarTrumpet.*` namespaces are intentionally retained to avoid a large no-op namespace churn that would make the functional refactor harder to audit.
+Run `tools\Convert-ToMyMix.ps1` once from PowerShell on Windows. The main solution after conversion is `MyMix.sln` and the application project is `EarTrumpet\MyMix.csproj`.
 
 ## Privacy
 
-MyMix does not initialize Bugsnag and does not send crash or diagnostic data to the EarTrumpet project. The diagnostics command writes a temporary local text file and opens it locally.
+MyMix does not initialize Bugsnag and does not transmit crash/diagnostic data to the EarTrumpet project. The diagnostics command writes and opens a local text file only.
 
 ## License and attribution
 
-MyMix is derived from EarTrumpet. The upstream `LICENSE` must remain with the derived source. During conversion the upstream README is preserved as `UPSTREAM_README.md`.
+MyMix is based on EarTrumpet. The upstream `LICENSE` is retained and applies to the derived source. `UPSTREAM_README.md` contains the upstream project README captured from the source archive.
