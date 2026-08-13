@@ -22,13 +22,12 @@ on:
       - tools/Convert-ToMyMix.ps1
       - tools/Finalize-StandaloneMyMix.ps1
       - tools/Optimize-MyMix.ps1
+      - tools/Optimize-MyMix/**
       - tools/Test-MyMixRefactor.ps1
-  schedule:
-    # Monday 03:17 JST. A self-hosted runner can pick the job up when it is online.
-    - cron: '17 18 * * 0'
 
+# Deliberately no schedule: a newly changed upstream revision must not be compiled automatically
+# on a persistent self-hosted machine merely because upstream changed.
 permissions:
-  actions: write
   contents: write
   pull-requests: write
 
@@ -44,34 +43,18 @@ jobs:
       FORCE_SYNC: ${{ github.event_name == 'push' && 'true' || inputs.force || 'false' }}
 
     steps:
-      - name: Purge stored Actions artifacts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const artifacts = await github.paginate(github.rest.actions.listArtifactsForRepo, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100,
-            });
-            for (const artifact of artifacts) {
-              await github.rest.actions.deleteArtifact({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                artifact_id: artifact.id,
-              });
-            }
-            core.info(`Deleted ${artifacts.length} stored Actions artifact(s).`);
-
       - name: Checkout MyMix
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: Set up NuGet
-        uses: NuGet/setup-nuget@v2
+        uses: NuGet/setup-nuget@d105a947828025cd7a980103c35ba2bfae586d0f # v2
+        with:
+          nuget-version: '7.9.0'
 
       - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
 
       - name: Import EarTrumpet and reapply MyMix patch
         id: sync
@@ -95,7 +78,6 @@ jobs:
             Join-Path $env:RUNNER_TEMP 'mymix-net462-refasm\1.0.3'
           }
           New-Item -ItemType Directory -Path $cacheBase -Force | Out-Null
-
           $packageRoot = Join-Path $cacheBase 'Microsoft.NETFramework.ReferenceAssemblies.net462'
           $mscorlib = Get-ChildItem $packageRoot -Recurse -Filter mscorlib.dll -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $mscorlib) {
@@ -105,11 +87,9 @@ jobs:
             $mscorlib = Get-ChildItem $packageRoot -Recurse -Filter mscorlib.dll | Select-Object -First 1
           }
           if (-not $mscorlib) { throw 'mscorlib.dll was not found in the net462 reference-assemblies cache.' }
-
           $frameworkVersionDir = $mscorlib.Directory.FullName
           $frameworkIdentifierDir = Split-Path $frameworkVersionDir -Parent
           $targetFrameworkRoot = (Split-Path $frameworkIdentifierDir -Parent) + '\'
-          Write-Host "Portable net462 reference assemblies: $frameworkVersionDir"
           "MYMIX_TARGET_FRAMEWORK_ROOT=$targetFrameworkRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Validate MyMix Release x86 application build
@@ -119,6 +99,23 @@ jobs:
         run: |
           msbuild .\EarTrumpet\MyMix.csproj /m /p:Configuration=Release /p:Platform=x86 /p:TargetFrameworkRootPath="$env:MYMIX_TARGET_FRAMEWORK_ROOT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Smoke test MyMix startup
+        id: smoke
+        if: steps.sync.outputs.changed == 'true'
+        shell: powershell
+        run: |
+          $env:MYMIX_MUTEX_SUFFIX = "ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $exe = (Resolve-Path '.\Build\Release\MyMix.exe').Path
+          $process = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -PassThru
+          if (-not $process.WaitForExit(15000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'MyMix smoke test did not exit within 15 seconds.'
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "MyMix smoke test exited with code $($process.ExitCode)."
+          }
+          Write-Host 'MyMix startup smoke test passed.'
 
       - name: Remove build-only files
         if: always() && steps.sync.outputs.changed == 'true'
@@ -136,11 +133,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host 'Transform maintenance produced no source diff.'
-          }
-          else {
-            git commit -m "Regenerate optimized MyMix after transform maintenance"
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Regenerate public-hardened MyMix after transform maintenance"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             git push origin HEAD:main
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -155,18 +149,13 @@ jobs:
           UPSTREAM_SHORT: ${{ steps.sync.outputs.upstream_short }}
         run: |
           $branch = "mymix/upstream-$env:UPSTREAM_SHORT"
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B $branch
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
           git add -A
           git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) {
-            throw 'The upstream SHA changed, but the regenerated MyMix tree contains no source changes.'
-          }
-
+          if ($LASTEXITCODE -eq 0) { throw 'Upstream changed but regenerated MyMix contains no source diff.' }
           git commit -m "Update MyMix from EarTrumpet $env:UPSTREAM_SHORT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git push --force origin "HEAD:refs/heads/$branch"
@@ -177,7 +166,7 @@ jobs:
         if: steps.sync.outputs.upstream_changed == 'true'
         id: pr
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           UPDATE_BRANCH: ${{ steps.publish.outputs.branch }}
           UPSTREAM_SHA: ${{ steps.sync.outputs.upstream_sha }}
@@ -192,21 +181,14 @@ jobs:
             if (existing.data.length > 0) return existing.data[0].html_url;
             const shortSha = process.env.UPSTREAM_SHA.slice(0, 12);
             const created = await github.rest.pulls.create({
-              owner,
-              repo,
-              head,
-              base: 'main',
+              owner, repo, head, base: 'main',
               title: `Update MyMix from EarTrumpet ${shortSha}`,
               body: [
-                'Automated EarTrumpet upstream refresh.',
-                '',
+                'Maintainer-initiated EarTrumpet upstream refresh.', '',
                 `Upstream ref: \`${process.env.UPSTREAM_REF}\``,
-                `Upstream commit: \`${process.env.UPSTREAM_SHA}\``,
-                '',
-                'The MyMix conversion, standalone finalization, deep optimizer, static validation, and Release x86 build all passed on the self-hosted runner.',
-                '',
-                'No GitHub Actions artifact was uploaded; build validation is intentionally ephemeral to consume zero artifact-storage quota.',
-                '',
+                `Upstream commit: \`${process.env.UPSTREAM_SHA}\``, '',
+                'MyMix conversion, public hardening, static validation, Release/x86 compilation, and startup smoke test passed on the self-hosted runner.', '',
+                'No GitHub Actions artifact or cache was uploaded.', '',
                 'Review upstream behavior/UI changes before merging this PR into `main`.'
               ].join('\n'),
             });
@@ -218,30 +200,23 @@ jobs:
         env:
           SYNC_OUTCOME: ${{ steps.sync.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
           CHANGED: ${{ steps.sync.outputs.changed }}
           UPSTREAM_CHANGED: ${{ steps.sync.outputs.upstream_changed }}
           UPSTREAM_SHA: ${{ steps.sync.outputs.upstream_sha }}
           UPDATE_BRANCH: ${{ steps.publish.outputs.branch }}
           PR_URL: ${{ steps.pr.outputs.result }}
         run: |
-          $lines = @('## MyMix upstream update', '', 'Actions artifact upload: disabled (0 bytes)')
-          if ($env:SYNC_OUTCOME -ne 'success') {
-            $lines += 'EarTrumpet import/MyMix conversion failed. No update branch was published.'
-          }
-          elseif ($env:CHANGED -ne 'true') {
-            $lines += 'No new EarTrumpet commit was found for the requested ref.'
-          }
-          elseif ($env:BUILD_OUTCOME -ne 'success') {
-            $lines += 'Release x86 build failed. No update was published.'
-          }
-          elseif ($env:UPSTREAM_CHANGED -ne 'true') {
-            $lines += 'Forced clean regeneration passed at 30 FPS peak-meter configuration; transform-maintenance changes were committed only if a source diff existed.'
-          }
+          $lines = @('## MyMix upstream update', '', 'Actions artifact/cache upload: disabled (0 bytes)')
+          if ($env:SYNC_OUTCOME -ne 'success') { $lines += 'Import/conversion/hardening failed. Nothing was published.' }
+          elseif ($env:CHANGED -ne 'true') { $lines += 'No new EarTrumpet commit was found for the requested ref.' }
+          elseif ($env:BUILD_OUTCOME -ne 'success') { $lines += 'Release x86 build failed. Nothing was published.' }
+          elseif ($env:SMOKE_OUTCOME -ne 'success') { $lines += 'Startup smoke test failed. Nothing was published.' }
+          elseif ($env:UPSTREAM_CHANGED -ne 'true') { $lines += 'Clean regeneration, public hardening, build, and startup smoke test passed.' }
           else {
             $lines += "EarTrumpet commit: ``$env:UPSTREAM_SHA``"
             $lines += "Validated branch: ``$env:UPDATE_BRANCH``"
-            $lines += 'Release x86 build: passed'
+            $lines += 'Release x86 build + startup smoke test: passed'
             if ($env:PR_URL) { $lines += "Pull request: $env:PR_URL" }
-            else { $lines += 'Pull request creation was unavailable; the validated branch was still pushed.' }
           }
           $lines -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
