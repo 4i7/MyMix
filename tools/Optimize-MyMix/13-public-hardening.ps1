@@ -220,13 +220,18 @@ Write-Text $deviceCollectionPath $deviceCollection
 # Give CI a real startup test without colliding with an already-running desktop instance.
 $mutexPath = 'EarTrumpet/Interop/Helpers/SingleInstanceAppMutex.cs'
 $mutex = Read-Text $mutexPath
-if ($mutex -notmatch '^using System;' -and $mutex -notmatch '(?m)^using System;') {
+if ($mutex -notmatch '(?m)^using System;') {
     $mutex = "using System;`r`n" + $mutex
 }
 if ($mutex -notmatch 'MYMIX_MUTEX_SUFFIX') {
+    $mutexReplacement = @'
+$1
+            var testSuffix = Environment.GetEnvironmentVariable("MYMIX_MUTEX_SUFFIX");
+            if (!string.IsNullOrWhiteSpace(testSuffix)) mutexName += "-" + testSuffix;
+'@
     $mutex = [regex]::Replace($mutex,
         '(?m)^(\s*var mutexName = \$"Local\\\\\{assembly\.GetName\(\)\.Name\}-0e510f7b-aed2-40b0-ad72-d2d3fdc89a02";\s*)$',
-        '$1' + "`r`n            var testSuffix = Environment.GetEnvironmentVariable(\"MYMIX_MUTEX_SUFFIX\");`r`n            if (!string.IsNullOrWhiteSpace(testSuffix)) mutexName += \"-\" + testSuffix;")
+        $mutexReplacement)
 }
 Write-Text $mutexPath $mutex
 
@@ -237,12 +242,24 @@ if ($app -notmatch '(?m)^using System\.Windows\.Threading;') {
 }
 if ($app -notmatch '_isSmokeTest') {
     $app = $app.Replace('        private ErrorReporter _errorReporter;', "        private ErrorReporter _errorReporter;`r`n        private bool _isSmokeTest;")
+    $startupReplacement = @'
+$1
+            _isSmokeTest = e.Args.Any(arg => string.Equals(arg, "--smoke-test", StringComparison.OrdinalIgnoreCase));
+'@
     $app = [regex]::Replace($app,
         '(?m)^(\s*private void OnAppStartup\(object sender, StartupEventArgs e\)\s*\r?\n\s*\{)',
-        '$1' + "`r`n            _isSmokeTest = e.Args.Any(arg => string.Equals(arg, \"--smoke-test\", StringComparison.OrdinalIgnoreCase));")
+        $startupReplacement)
+    $trayReplacement = @'
+$1
+
+            if (_isSmokeTest)
+            {
+                Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => Shutdown(0)));
+            }
+'@
     $app = [regex]::Replace($app,
         '(?m)^(\s*_trayIcon\.IsVisible = true;\s*)$',
-        '$1' + "`r`n`r`n            if (_isSmokeTest)`r`n            {`r`n                Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => Shutdown(0)));`r`n            }")
+        $trayReplacement)
 }
 $app = [regex]::Replace($app, '(?ms)        private bool IsCriticalFontLoadFailure\(Exception ex\)\s*\{.*?\n        \}', @'
         private bool IsCriticalFontLoadFailure(Exception ex)
