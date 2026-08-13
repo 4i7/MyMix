@@ -1,0 +1,40 @@
+name: Apply MyMix refactor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  convert-build-commit:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Convert source to MyMix and validate Release x86 build
+        shell: powershell
+        run: .\tools\Convert-ToMyMix.ps1
+
+      - name: Commit converted source
+        shell: powershell
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "No generated changes to commit."
+            exit 0
+          }
+          git commit -m "Apply MyMix refactor to EarTrumpet source"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
