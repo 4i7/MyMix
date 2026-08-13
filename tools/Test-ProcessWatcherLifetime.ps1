@@ -27,7 +27,7 @@ using System.Threading;
 public sealed class WatchCounter {
     private int _count;
     public int Value { get { return Volatile.Read(ref _count); } }
-    public void Hit(int pid) { Interlocked.Increment(ref _count); }
+    public void Hit(int processId) { Interlocked.Increment(ref _count); }
 }
 public static class WatchRace {
     public static void Run(IDisposable registration, Process process) {
@@ -59,13 +59,13 @@ function Register($p, $counter) {
     [IDisposable]$watch.Invoke($null, @($p.Id, $callback))
 }
 function With-Lock([scriptblock]$body) { [Threading.Monitor]::Enter($sync); try { & $body } finally { [Threading.Monitor]::Exit($sync) } }
-function Get-Data([int]$pid) { With-Lock { if ($watchers.ContainsKey($pid)) { $watchers[$pid] } else { $null } } }
+function Get-Data([int]$processId) { With-Lock { if ($watchers.ContainsKey($processId)) { $watchers[$processId] } else { $null } } }
 function Callback-Count($data) { With-Lock { $data.GetType().GetField('QuitActions', $flags).GetValue($data).Count } }
 function Handle($data) { With-Lock { [IntPtr]$data.GetType().GetField('ProcessHandle', $flags).GetValue($data) } }
 function Watcher-Count { With-Lock { $watchers.Count } }
-function Gone([int]$pid, $data) {
-    Until { $null -eq (Get-Data $pid) } "PID $pid watcher was not reclaimed."
-    Until { (Handle $data) -eq [IntPtr]::Zero } "PID $pid process handle was not closed by the watcher thread."
+function Gone([int]$processId, $data) {
+    Until { $null -eq (Get-Data $processId) } "PID $processId watcher was not reclaimed."
+    Until { (Handle $data) -eq [IntPtr]::Zero } "PID $processId process handle was not closed by the watcher thread."
 }
 
 # Same PID: dispose A, terminate process, only B fires once. Dispose is idempotent.
