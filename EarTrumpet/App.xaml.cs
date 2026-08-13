@@ -45,10 +45,10 @@ namespace EarTrumpet
             RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
 
             Exit += (_, __) => IsShuttingDown = true;
-            HasIdentity = PackageHelper.CheckHasIdentity();
-            HasDevIdentity = PackageHelper.HasDevIdentity();
-            PackageVersion = PackageHelper.GetVersion(HasIdentity);
-            PackageName = PackageHelper.GetFamilyName(HasIdentity);
+            HasIdentity = false;
+            HasDevIdentity = false;
+            PackageVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            PackageName = null;
 
             Settings = new AppSettings();
             _errorReporter = new ErrorReporter(Settings);

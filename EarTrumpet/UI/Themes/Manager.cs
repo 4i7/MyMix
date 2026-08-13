@@ -1,4 +1,4 @@
-﻿using EarTrumpet.DataModel;
+using EarTrumpet.DataModel;
 using EarTrumpet.Extensions;
 using EarTrumpet.Interop.Helpers;
 using System;
@@ -8,7 +8,6 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Windows.UI.ViewManagement;
 
 namespace EarTrumpet.UI.Themes
 {
@@ -26,16 +25,7 @@ namespace EarTrumpet.UI.Themes
             {
                 if (!lastAnimationsEnabledValue.HasValue)
                 {
-                    if (Environment.OSVersion.IsAtLeast(OSVersions.Windows11))
-                    {
-                        lastAnimationsEnabledValue = new UISettings().AnimationsEnabled;
-                    }
-                    else
-                    {
-                        // Windows 10 taskbar flyouts are incorrectly tied to [SPI_GETANIMATION]
-                        // ANIMATIONINFO.iMinAnimate
-                        lastAnimationsEnabledValue = SystemParameters.MinimizeAnimation;
-                    }
+                    lastAnimationsEnabledValue = SystemParameters.MinimizeAnimation;
                 }
                 return lastAnimationsEnabledValue.Value;
             }
