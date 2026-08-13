@@ -1,6 +1,6 @@
 # Public-release hardening: remove upstream visual branding from the binary payload,
 # remove deliberately crashable diagnostics, add a deterministic smoke-test mode,
-# and close several lifetime/finalizer edge cases found during the pre-public audit.
+# and close lifetime/finalizer edge cases found during the pre-public audit.
 
 # Do not redistribute the upstream horn/application icon as MyMix branding. Runtime volume
 # glyphs come from Windows; if those system resources are unavailable, use the stock
@@ -209,24 +209,40 @@ Write-Text $sessionCollectionPath $sessionCollection
 # and Reset paths actually invoke that cleanup before dropping references.
 $deviceCollectionPath = 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs'
 $deviceCollection = Read-Text $deviceCollectionPath
-$deviceCollection = $deviceCollection.Replace('                    if (allExisting != null)`r`n                    {`r`n                        AllDevices.Remove(allExisting);', '                    if (allExisting != null)`r`n                    {`r`n                        allExisting.Dispose();`r`n                        AllDevices.Remove(allExisting);')
-$deviceCollection = $deviceCollection.Replace('                case NotifyCollectionChangedAction.Reset:`r`n                    AllDevices.Clear();', '                case NotifyCollectionChangedAction.Reset:`r`n                    for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();`r`n                    AllDevices.Clear();')
+$deviceCollection = [regex]::Replace($deviceCollection,
+    '(?ms)(if \(allExisting != null\)\s*\{)(?!\s*allExisting\.Dispose\(\);)',
+    '$1' + "`r`n                        allExisting.Dispose();")
+$deviceCollection = [regex]::Replace($deviceCollection,
+    '(?ms)(case NotifyCollectionChangedAction\.Reset:\s*)(?!for \(var i = 0; i < AllDevices\.Count; i\+\+\) AllDevices\[i\]\.Dispose\(\);)',
+    '$1' + "for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();`r`n                    ")
 Write-Text $deviceCollectionPath $deviceCollection
 
 # Give CI a real startup test without colliding with an already-running desktop instance.
 $mutexPath = 'EarTrumpet/Interop/Helpers/SingleInstanceAppMutex.cs'
 $mutex = Read-Text $mutexPath
-$mutex = $mutex.Replace('using System.Diagnostics;', "using System;`r`nusing System.Diagnostics;")
-$mutex = $mutex.Replace('            var mutexName = $"Local\\{assembly.GetName().Name}-0e510f7b-aed2-40b0-ad72-d2d3fdc89a02";', '            var mutexName = $"Local\\{assembly.GetName().Name}-0e510f7b-aed2-40b0-ad72-d2d3fdc89a02";`r`n            var testSuffix = Environment.GetEnvironmentVariable("MYMIX_MUTEX_SUFFIX");`r`n            if (!string.IsNullOrWhiteSpace(testSuffix)) mutexName += "-" + testSuffix;')
+if ($mutex -notmatch '^using System;' -and $mutex -notmatch '(?m)^using System;') {
+    $mutex = "using System;`r`n" + $mutex
+}
+if ($mutex -notmatch 'MYMIX_MUTEX_SUFFIX') {
+    $mutex = [regex]::Replace($mutex,
+        '(?m)^(\s*var mutexName = \$"Local\\\\\{assembly\.GetName\(\)\.Name\}-0e510f7b-aed2-40b0-ad72-d2d3fdc89a02";\s*)$',
+        '$1' + "`r`n            var testSuffix = Environment.GetEnvironmentVariable(\"MYMIX_MUTEX_SUFFIX\");`r`n            if (!string.IsNullOrWhiteSpace(testSuffix)) mutexName += \"-\" + testSuffix;")
+}
 Write-Text $mutexPath $mutex
 
 $appPath = 'EarTrumpet/App.xaml.cs'
 $app = Read-Text $appPath
+if ($app -notmatch '(?m)^using System\.Windows\.Threading;') {
+    $app = $app.Replace('using System.Windows.Media;', "using System.Windows.Media;`r`nusing System.Windows.Threading;")
+}
 if ($app -notmatch '_isSmokeTest') {
     $app = $app.Replace('        private ErrorReporter _errorReporter;', "        private ErrorReporter _errorReporter;`r`n        private bool _isSmokeTest;")
-    $app = $app.Replace('        private void OnAppStartup(object sender, StartupEventArgs e)`r`n        {', '        private void OnAppStartup(object sender, StartupEventArgs e)`r`n        {`r`n            _isSmokeTest = e.Args.Any(arg => string.Equals(arg, "--smoke-test", StringComparison.OrdinalIgnoreCase));')
-    $app = $app.Replace('            _trayIcon.IsVisible = true;`r`n        }', '            _trayIcon.IsVisible = true;`r`n`r`n            if (_isSmokeTest)`r`n            {`r`n                Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => Shutdown(0)));`r`n            }`r`n        }')
-    $app = $app.Replace('using System.Windows.Media;', "using System.Windows.Media;`r`nusing System.Windows.Threading;")
+    $app = [regex]::Replace($app,
+        '(?m)^(\s*private void OnAppStartup\(object sender, StartupEventArgs e\)\s*\r?\n\s*\{)',
+        '$1' + "`r`n            _isSmokeTest = e.Args.Any(arg => string.Equals(arg, \"--smoke-test\", StringComparison.OrdinalIgnoreCase));")
+    $app = [regex]::Replace($app,
+        '(?m)^(\s*_trayIcon\.IsVisible = true;\s*)$',
+        '$1' + "`r`n`r`n            if (_isSmokeTest)`r`n            {`r`n                Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => Shutdown(0)));`r`n            }")
 }
 $app = [regex]::Replace($app, '(?ms)        private bool IsCriticalFontLoadFailure\(Exception ex\)\s*\{.*?\n        \}', @'
         private bool IsCriticalFontLoadFailure(Exception ex)
