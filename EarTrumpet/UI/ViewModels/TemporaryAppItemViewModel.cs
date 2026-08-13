@@ -3,17 +3,19 @@ using EarTrumpet.DataModel.Audio;
 using EarTrumpet.DataModel.WindowsAudio;
 using EarTrumpet.Extensions;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading;
 using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace EarTrumpet.UI.ViewModels
 {
     // This ViewModel is used in redirection scenarios. When we move a State=Inactive session to a device,
-    // this serves as the visualziation and data container for that app until a real session is created.
-    public class TemporaryAppItemViewModel : BindableBase, IAppItemViewModel
+    // this serves as the visualization and data container for that app until a real session is created.
+    public class TemporaryAppItemViewModel : BindableBase, IAppItemViewModel, IDisposable
     {
         public event EventHandler Expired;
 
@@ -68,7 +70,10 @@ namespace EarTrumpet.UI.ViewModels
         private readonly IAudioDeviceManager _deviceManager;
         private readonly WeakReference<DeviceCollectionViewModel> _parent;
         private readonly Dispatcher _currentDispatcher = Dispatcher.CurrentDispatcher;
+        private readonly List<IDisposable> _processWatchRegistrations = new List<IDisposable>();
         private int[] _processIds;
+        private int _disposed;
+        private int _expired;
         private int _volume;
         private bool _isMuted;
 
@@ -109,29 +114,12 @@ namespace EarTrumpet.UI.ViewModels
             }
             else
             {
-                _processIds = new int[] { ProcessId };
+                _processIds = new[] { ProcessId };
             }
 
             foreach (var pid in _processIds)
             {
-                ProcessWatcherService.WatchProcess(pid, (pidQuit) =>
-                {
-                    _currentDispatcher.BeginInvoke((Action)(() =>
-                    {
-                        var newPids = _processIds.ToList();
-
-                        if (newPids.Contains(pidQuit))
-                        {
-                            newPids.Remove(pidQuit);
-                        }
-                        _processIds = newPids.ToArray();
-
-                        if (_processIds.Length == 0)
-                        {
-                            Expire();
-                        }
-                    }));
-                });
+                _processWatchRegistrations.Add(ProcessWatcherService.WatchProcess(pid, OnProcessQuit));
             }
 
 #if VSDEBUG
@@ -139,9 +127,36 @@ namespace EarTrumpet.UI.ViewModels
 #endif
         }
 
+        private bool IsDisposed => Interlocked.CompareExchange(ref _disposed, 0, 0) != 0;
+
+        private void OnProcessQuit(int pidQuit)
+        {
+            if (IsDisposed) return;
+
+            _currentDispatcher.BeginInvoke((Action)(() =>
+            {
+                if (IsDisposed) return;
+
+                var newPids = _processIds.ToList();
+                if (newPids.Contains(pidQuit))
+                {
+                    newPids.Remove(pidQuit);
+                }
+                _processIds = newPids.ToArray();
+
+                if (_processIds.Length == 0)
+                {
+                    Expire();
+                }
+            }));
+        }
+
         private void ChildApp_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            RaisePropertyChanged(e.PropertyName);
+            if (!IsDisposed)
+            {
+                RaisePropertyChanged(e.PropertyName);
+            }
         }
 
         public bool DoesGroupWith(IAppItemViewModel app)
@@ -151,7 +166,8 @@ namespace EarTrumpet.UI.ViewModels
 
         public void MoveToDevice(string id, bool hide)
         {
-            // Update the output for all processes represented by this app.
+            if (IsDisposed) return;
+
             foreach (var pid in _processIds)
             {
                 ((IAudioDeviceManagerWindowsAudio)_deviceManager).SetDefaultEndPoint(id, pid);
@@ -165,7 +181,36 @@ namespace EarTrumpet.UI.ViewModels
 
         private void Expire()
         {
-            Expired?.Invoke(this, null);
+            if (Interlocked.Exchange(ref _expired, 1) != 0) return;
+
+            try
+            {
+                Expired?.Invoke(this, EventArgs.Empty);
+            }
+            finally
+            {
+                Dispose();
+            }
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+
+            foreach (var registration in _processWatchRegistrations)
+            {
+                registration.Dispose();
+            }
+            _processWatchRegistrations.Clear();
+
+            if (ChildApps != null)
+            {
+                foreach (var child in ChildApps)
+                {
+                    child.PropertyChanged -= ChildApp_PropertyChanged;
+                    (child as IDisposable)?.Dispose();
+                }
+            }
         }
 
         public void UpdatePeakValueBackground() { }
