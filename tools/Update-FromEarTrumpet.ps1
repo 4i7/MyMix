@@ -25,14 +25,14 @@ function Write-WorkflowOutput([string]$Name, [string]$Value) {
 function Invoke-Git([string[]]$Arguments) {
     & git @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "git failed with exit code $LASTEXITCODE: git $($Arguments -join ' ')"
+        throw "git failed with exit code ${LASTEXITCODE}: git $($Arguments -join ' ')"
     }
 }
 
 function Invoke-GitCapture([string[]]$Arguments) {
     $output = & git @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "git failed with exit code $LASTEXITCODE: git $($Arguments -join ' ')"
+        throw "git failed with exit code ${LASTEXITCODE}: git $($Arguments -join ' ')"
     }
     return ($output -join "`n").Trim()
 }
