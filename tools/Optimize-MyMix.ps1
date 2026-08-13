@@ -59,6 +59,7 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/03c-visible-peak-scope.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/04-volume-hotpath.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/04b-single-aggregate-peak.ps1')
+. (Resolve-RepoPath 'tools/Optimize-MyMix/04c-single-peak-cleanup.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/05-settings-storage.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/06-tray.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/07-output-trim.ps1')
@@ -68,7 +69,7 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/11-audio-callback-coalescing.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/12-resource-trim.ps1')
 
-Write-Text '.mymix-optimized' "version=3`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`n"
+Write-Text '.mymix-optimized' "version=4`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`n"
 
 # Final invariants. These are deliberately behavioral, not just file-existence checks.
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'new Timer(1000.0 / 30.0)'
@@ -82,6 +83,7 @@ Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'Allo
 Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'PeakReleaseFactor = 0.72f'
 Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'public virtual void Dispose()'
 Assert-NotContains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'PeakValue2'
+Assert-NotContains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' 'PeakValue2'
 Assert-Contains 'EarTrumpet/UI/Controls/VolumeSlider.cs' 'OnPeakValue1Changed'
 Assert-NotContains 'EarTrumpet/UI/Controls/VolumeSlider.cs' 'PeakValue2'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceViewModel.cs' 'public override void Dispose()'
@@ -109,4 +111,4 @@ Assert-NotContains 'EarTrumpet/AppSettings.cs' 'UseLogarithmicVolume'
 Assert-NotContains 'EarTrumpet/AppSettings.cs' 'UseLegacyIcon'
 Assert-NotContains 'EarTrumpet/AppSettings.cs' 'IsTelemetryEnabled'
 
-Write-Host 'MyMix deep optimization v3 passed.'
+Write-Host 'MyMix deep optimization v4 passed.'
