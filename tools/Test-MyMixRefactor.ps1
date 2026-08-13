@@ -75,8 +75,6 @@ if ($Optimized) {
     Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDevice.cs' 'QueueVolumeUiUpdate();'
     Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSession.cs' 'QueueVolumeUiUpdate();'
 
-    # Process lifetime stability: the generated source no longer calls the inherited multi-handle
-    # wait API and background callback exceptions are contained.
     Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Kernel32.WaitForMultipleObjects('
     Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'PollIntervalMilliseconds = 500'
     Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForSingleObject(data.ProcessHandle, 0)'
@@ -115,7 +113,6 @@ else {
     Assert-NotContains 'EarTrumpet/App.xaml.cs' 'AddonManager.Host'
 }
 
-# All workflows must avoid Actions artifact/cache storage and use pinned third-party actions.
 foreach ($workflow in @('.github/workflows/apply-mymix.yml', '.github/workflows/update-from-eartrumpet.yml', '.github/workflows/release.yml')) {
     Assert-NotContains $workflow 'actions/upload-artifact'
     Assert-NotContains $workflow 'actions/cache'
@@ -130,9 +127,12 @@ Assert-NotMatches '.github/workflows/update-from-eartrumpet.yml' '(?m)^\s*schedu
 Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'tools/Optimize-MyMix/**'
 Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b'
 
-# Release distribution must use GitHub Release assets, publish only after both assets exist,
-# include checksum/license/privacy/provenance, and never ship debug symbols.
+# Release distribution is maintainer-only, reads provenance directly from the committed marker,
+# uses GitHub Release assets only, and publishes only after both the ZIP and checksum exist.
 Assert-Contains '.github/workflows/release.yml' "name: Release MyMix"
+Assert-NotMatches '.github/workflows/release.yml' '(?m)^\s*push\s*:'
+Assert-Contains '.github/workflows/release.yml' "fs.readFileSync('.mymix-converted', 'utf8')"
+Assert-NotContains '.github/workflows/release.yml' 'UPSTREAM_SHA='
 Assert-Contains '.github/workflows/release.yml' 'MyMix-x86.zip'
 Assert-Contains '.github/workflows/release.yml' 'SHA256SUMS.txt'
 Assert-Contains '.github/workflows/release.yml' "'LICENSE', 'README.md', 'PRIVACY.md', 'THIRD_PARTY_NOTICES.md'"
@@ -142,6 +142,7 @@ Assert-Contains '.github/workflows/release.yml' 'Required release assets are mis
 Assert-NotContains '.github/workflows/release.yml' 'MyMix.pdb'
 Assert-NotContains '.github/workflows/release.yml' 'upload-artifact'
 Assert-Contains '.github/workflows/release.yml' 'actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b'
+Assert-PathMissing '.github/workflows/repair-v1-release.yml'
 
 if ($Failures.Count -gt 0) {
     Write-Host 'MyMix refactor validation failed:' -ForegroundColor Red
