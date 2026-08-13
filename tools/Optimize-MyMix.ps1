@@ -54,6 +54,7 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/01-runtime.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/02-collections.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/03-peak-meter.ps1')
+. (Resolve-RepoPath 'tools/Optimize-MyMix/03b-peak-meter-compile-fix.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/04-volume-hotpath.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/05-settings-storage.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/06-tray.ps1')
@@ -65,6 +66,8 @@ Write-Text '.mymix-optimized' "version=2`npeak_meter=30fps-aggregate-smoothed`nt
 # producing a partially optimized MyMix.
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'new Timer(1000.0 / 30.0)'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'DispatcherPriority.Render'
+Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'System.Threading.Interlocked.Exchange(ref _peakUpdateRunning, 1)'
+Assert-NotContains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'using System.Threading;'
 Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'meter.GetPeakValue()'
 Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'PeakReleaseFactor = 0.72f'
 Assert-Contains 'EarTrumpet/UI/Controls/VolumeSlider.cs' 'OnPeakValue1Changed'
