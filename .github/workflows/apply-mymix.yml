@@ -32,6 +32,34 @@ jobs:
         shell: powershell
         run: .\tools\Convert-ToMyMix.ps1 -SkipBuild
 
+      - name: Commit converted source
+        shell: powershell
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "No generated changes to commit."
+          }
+          else {
+            git commit -m "Apply MyMix refactor to EarTrumpet source"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git push
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Show installed .NET Framework reference assemblies
+        shell: powershell
+        run: |
+          $root = "$env:ProgramFiles(x86)\Reference Assemblies\Microsoft\Framework\.NETFramework"
+          if (Test-Path $root) {
+            Get-ChildItem $root -Directory | Select-Object -ExpandProperty Name
+          }
+          else {
+            Write-Warning ".NET Framework reference assembly directory is absent."
+          }
+
       - name: Restore MyMix application packages
         shell: powershell
         run: |
@@ -57,19 +85,3 @@ jobs:
           else {
             Write-Warning "Desktop Bridge build tools are not installed; package-project validation is skipped. Install the Visual Studio WinUI/UWP application development build tools to enable it."
           }
-
-      - name: Commit converted source
-        shell: powershell
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "No generated changes to commit."
-            exit 0
-          }
-          git commit -m "Apply MyMix refactor to EarTrumpet source"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git push
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
