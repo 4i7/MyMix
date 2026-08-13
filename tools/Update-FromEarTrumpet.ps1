@@ -123,6 +123,9 @@ try {
     $finalizer = Join-Path $PSScriptRoot 'Finalize-StandaloneMyMix.ps1'
     & $finalizer
 
+    $optimizer = Join-Path $PSScriptRoot 'Optimize-MyMix.ps1'
+    & $optimizer
+
     Ensure-MyMixBuildMetadata
 
     if (-not $upstreamChanged -and $CurrentMarkerText) {
@@ -143,7 +146,7 @@ try {
     & $validator
 
     Write-WorkflowOutput 'changed' 'true'
-    Write-Host "EarTrumpet $upstreamSha was converted to MyMix successfully."
+    Write-Host "EarTrumpet $upstreamSha was converted, finalized, and deeply optimized for MyMix successfully."
 }
 finally {
     Remove-Item -LiteralPath $UpstreamWorktree -Recurse -Force -ErrorAction SilentlyContinue
