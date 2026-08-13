@@ -123,15 +123,25 @@ jobs:
       - name: Create or reuse draft release
         id: draft
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
-        env:
-          RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
-          UPSTREAM_SHA: ${{ env.UPSTREAM_SHA }}
         with:
           result-encoding: string
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const tag = `v${process.env.RELEASE_VERSION}`;
+            const body = [
+              'MyMix is an independent, unofficial derivative of EarTrumpet.',
+              '',
+              `EarTrumpet upstream: \`${process.env.UPSTREAM_SHA}\``,
+              'Build: standalone Windows x86 / .NET Framework 4.6.2 target',
+              'Privacy: no automatic telemetry, crash-report upload, or feedback upload',
+              '',
+              '**Unsigned binary:** Windows may show an unknown-publisher or SmartScreen warning.',
+              'Verify `MyMix-x86.zip` against `SHA256SUMS.txt` from this release before running it.',
+              '',
+              'See the bundled `LICENSE`, `THIRD_PARTY_NOTICES.md`, and `PRIVACY.md` before redistribution or diagnostic sharing.'
+            ].join('\n');
+
             let release;
             try {
               release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
@@ -139,23 +149,18 @@ jobs:
                 core.setFailed(`${tag} is already published; refusing to overwrite it.`);
                 return;
               }
+              release = (await github.rest.repos.updateRelease({
+                owner, repo, release_id: release.id,
+                target_commitish: context.sha,
+                name: `MyMix ${process.env.RELEASE_VERSION}`,
+                body, draft: true, prerelease: false
+              })).data;
             } catch (error) {
               if (error.status !== 404) throw error;
               release = (await github.rest.repos.createRelease({
                 owner, repo, tag_name: tag, target_commitish: context.sha,
-                name: `MyMix ${process.env.RELEASE_VERSION}`, draft: true, prerelease: false,
-                body: [
-                  'MyMix is an independent, unofficial derivative of EarTrumpet.',
-                  '',
-                  `EarTrumpet upstream: \`${process.env.UPSTREAM_SHA}\``,
-                  'Build: standalone Windows x86 / .NET Framework 4.6.2 target',
-                  'Privacy: no automatic telemetry, crash-report upload, or feedback upload',
-                  '',
-                  '**Unsigned binary:** Windows may show an unknown-publisher or SmartScreen warning.',
-                  'Verify `MyMix-x86.zip` against `SHA256SUMS.txt` from this release before running it.',
-                  '',
-                  'See the bundled `LICENSE`, `THIRD_PARTY_NOTICES.md`, and `PRIVACY.md` before redistribution or diagnostic sharing.'
-                ].join('\n')
+                name: `MyMix ${process.env.RELEASE_VERSION}`,
+                body, draft: true, prerelease: false
               })).data;
             }
             return String(release.id);
@@ -164,7 +169,6 @@ jobs:
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           RELEASE_ID: ${{ steps.draft.outputs.result }}
-          DIST: ${{ env.MYMIX_RELEASE_DIST }}
         with:
           script: |
             const fs = require('fs');
@@ -174,6 +178,9 @@ jobs:
             const release_id = Number(process.env.RELEASE_ID);
             if (!Number.isInteger(release_id)) throw new Error('Draft release ID is invalid.');
 
+            const release = (await github.rest.repos.getRelease({ owner, repo, release_id })).data;
+            if (!release.draft) throw new Error('Refusing to replace assets on a published release.');
+
             const existing = (await github.rest.repos.listReleaseAssets({ owner, repo, release_id, per_page: 100 })).data;
             for (const asset of existing) {
               if (asset.name === 'MyMix-x86.zip' || asset.name === 'SHA256SUMS.txt') {
@@ -181,11 +188,13 @@ jobs:
               }
             }
 
+            const uploadBase = release.upload_url.replace('{?name,label}', '');
             for (const [name, contentType] of [['MyMix-x86.zip', 'application/zip'], ['SHA256SUMS.txt', 'text/plain']]) {
-              const file = path.join(process.env.DIST, name);
+              const file = path.join(process.env.MYMIX_RELEASE_DIST, name);
               const data = fs.readFileSync(file);
-              await github.request('POST /repos/{owner}/{repo}/releases/{release_id}/assets', {
-                owner, repo, release_id, name,
+              const url = `${uploadBase}?name=${encodeURIComponent(name)}`;
+              await github.request({
+                method: 'POST', url,
                 headers: { 'content-type': contentType, 'content-length': data.length },
                 data
               });
