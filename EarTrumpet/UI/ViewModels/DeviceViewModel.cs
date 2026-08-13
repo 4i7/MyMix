@@ -152,7 +152,6 @@ namespace EarTrumpet.UI.ViewModels
 
         public void AppMovingToThisDevice(TemporaryAppItemViewModel app)
         {
-            app.Expired += OnAppExpired;
             foreach (var childApp in app.ChildApps)
             {
                 ((IAudioDeviceManagerWindowsAudio)_deviceManager).UnhideSessionsForProcessId(_device.Id, childApp.ProcessId);
@@ -160,22 +159,37 @@ namespace EarTrumpet.UI.ViewModels
 
             for (var i = 0; i < Apps.Count; i++)
             {
-                if (Apps[i].DoesGroupWith(app)) return;
+                if (!Apps[i].DoesGroupWith(app)) continue;
+                app.Dispose();
+                return;
             }
+
+            app.Expired += OnAppExpired;
             Apps.AddSorted(app, AppItemViewModel.CompareByExeName);
         }
 
         private void OnAppExpired(object sender, EventArgs e)
         {
             var app = (TemporaryAppItemViewModel)sender;
-            if (!Apps.Contains(app)) return;
             app.Expired -= OnAppExpired;
-            Apps.Remove(app);
+            if (Apps.Contains(app))
+            {
+                Apps.Remove(app);
+            }
+            app.Dispose();
         }
 
         internal void AppLeavingFromThisDevice(IAppItemViewModel app)
         {
-            if (app is TemporaryAppItemViewModel) Apps.Remove(app);
+            if (app is TemporaryAppItemViewModel temporaryApp)
+            {
+                temporaryApp.Expired -= OnAppExpired;
+                if (Apps.Contains(temporaryApp))
+                {
+                    Apps.Remove(temporaryApp);
+                }
+                temporaryApp.Dispose();
+            }
         }
 
         public void MakeDefaultDevice() => _deviceManager.Default = _device;
