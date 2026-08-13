@@ -1,0 +1,224 @@
+name: Release MyMix
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (must match AssemblyVersion major.minor.patch)
+        required: true
+        default: '1.0.0'
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mymix-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: self-hosted
+    env:
+      RELEASE_VERSION: ${{ inputs.version || '1.0.0' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up NuGet
+        uses: NuGet/setup-nuget@d105a947828025cd7a980103c35ba2bfae586d0f # v2
+        with:
+          nuget-version: '7.9.0'
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
+
+      - name: Validate release metadata and source invariants
+        shell: powershell
+        run: |
+          if ($env:RELEASE_VERSION -notmatch '^\d+\.\d+\.\d+$') {
+            throw 'Release version must be numeric major.minor.patch.'
+          }
+          $assembly = [IO.File]::ReadAllText('.\EarTrumpet\Properties\AssemblyInfo.cs')
+          $match = [regex]::Match($assembly, 'AssemblyVersion\("(\d+)\.(\d+)\.(\d+)\.\d+"\)')
+          if (-not $match.Success) { throw 'AssemblyVersion was not found.' }
+          $assemblyRelease = "$($match.Groups[1].Value).$($match.Groups[2].Value).$($match.Groups[3].Value)"
+          if ($assemblyRelease -ne $env:RELEASE_VERSION) {
+            throw "Release version $env:RELEASE_VERSION does not match AssemblyVersion $assemblyRelease."
+          }
+          .\tools\Test-MyMixRefactor.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $marker = [IO.File]::ReadAllText('.\.mymix-converted')
+          $upstream = [regex]::Match($marker, '(?m)^upstream=File-New-Project/EarTrumpet@([0-9a-f]{40})$')
+          if (-not $upstream.Success) { throw 'Recorded EarTrumpet upstream SHA was not found.' }
+          "UPSTREAM_SHA=$($upstream.Groups[1].Value)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Prepare portable .NET Framework 4.6.2 reference assemblies
+        shell: powershell
+        run: |
+          $cacheBase = if ($env:RUNNER_TOOL_CACHE) { Join-Path $env:RUNNER_TOOL_CACHE 'mymix-net462-refasm\1.0.3' } else { Join-Path $env:RUNNER_TEMP 'mymix-net462-refasm\1.0.3' }
+          New-Item -ItemType Directory -Path $cacheBase -Force | Out-Null
+          $packageRoot = Join-Path $cacheBase 'Microsoft.NETFramework.ReferenceAssemblies.net462'
+          $mscorlib = Get-ChildItem $packageRoot -Recurse -Filter mscorlib.dll -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $mscorlib) {
+            Remove-Item $packageRoot -Recurse -Force -ErrorAction SilentlyContinue
+            nuget install Microsoft.NETFramework.ReferenceAssemblies.net462 -Version 1.0.3 -DirectDownload -ExcludeVersion -OutputDirectory $cacheBase
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $mscorlib = Get-ChildItem $packageRoot -Recurse -Filter mscorlib.dll | Select-Object -First 1
+          }
+          if (-not $mscorlib) { throw 'mscorlib.dll was not found in the net462 reference-assemblies cache.' }
+          $frameworkVersionDir = $mscorlib.Directory.FullName
+          $frameworkIdentifierDir = Split-Path $frameworkVersionDir -Parent
+          $targetFrameworkRoot = (Split-Path $frameworkIdentifierDir -Parent) + '\'
+          "MYMIX_TARGET_FRAMEWORK_ROOT=$targetFrameworkRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build Release x86
+        shell: powershell
+        run: |
+          msbuild .\EarTrumpet\MyMix.csproj /m /p:Configuration=Release /p:Platform=x86 /p:TargetFrameworkRootPath="$env:MYMIX_TARGET_FRAMEWORK_ROOT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Smoke test MyMix startup
+        shell: powershell
+        run: .\tools\Smoke-TestMyMix.ps1
+
+      - name: Stage release ZIP and checksum
+        shell: powershell
+        run: |
+          $dist = Join-Path $env:RUNNER_TEMP "mymix-release-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          Remove-Item $dist -Recurse -Force -ErrorAction SilentlyContinue
+          $payload = Join-Path $dist 'MyMix-x86'
+          New-Item -ItemType Directory -Path $payload -Force | Out-Null
+
+          foreach ($file in @('MyMix.exe', 'MyMix.exe.config')) {
+            $source = Join-Path '.\Build\Release' $file
+            if (-not (Test-Path -LiteralPath $source)) { throw "Required release file is missing: $source" }
+            Copy-Item -LiteralPath $source -Destination $payload
+          }
+          if (Test-Path -LiteralPath '.\Build\Release\ja-JP\MyMix.resources.dll') {
+            New-Item -ItemType Directory -Path (Join-Path $payload 'ja-JP') -Force | Out-Null
+            Copy-Item -LiteralPath '.\Build\Release\ja-JP\MyMix.resources.dll' -Destination (Join-Path $payload 'ja-JP')
+          }
+          foreach ($doc in @('LICENSE', 'README.md', 'PRIVACY.md', 'THIRD_PARTY_NOTICES.md')) {
+            Copy-Item -LiteralPath (Join-Path '.' $doc) -Destination $payload
+          }
+
+          $zip = Join-Path $dist 'MyMix-x86.zip'
+          Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  MyMix-x86.zip" | Set-Content -LiteralPath (Join-Path $dist 'SHA256SUMS.txt') -Encoding ascii
+
+          "MYMIX_RELEASE_DIST=$dist" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "MyMix-x86.zip SHA256: $hash"
+
+      - name: Create or reuse draft release
+        id: draft
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+          UPSTREAM_SHA: ${{ env.UPSTREAM_SHA }}
+        with:
+          result-encoding: string
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = `v${process.env.RELEASE_VERSION}`;
+            let release;
+            try {
+              release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
+              if (!release.draft) {
+                core.setFailed(`${tag} is already published; refusing to overwrite it.`);
+                return;
+              }
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              release = (await github.rest.repos.createRelease({
+                owner, repo, tag_name: tag, target_commitish: context.sha,
+                name: `MyMix ${process.env.RELEASE_VERSION}`, draft: true, prerelease: false,
+                body: [
+                  'MyMix is an independent, unofficial derivative of EarTrumpet.',
+                  '',
+                  `EarTrumpet upstream: \`${process.env.UPSTREAM_SHA}\``,
+                  'Build: standalone Windows x86 / .NET Framework 4.6.2 target',
+                  'Privacy: no automatic telemetry, crash-report upload, or feedback upload',
+                  '',
+                  '**Unsigned binary:** Windows may show an unknown-publisher or SmartScreen warning.',
+                  'Verify `MyMix-x86.zip` against `SHA256SUMS.txt` from this release before running it.',
+                  '',
+                  'See the bundled `LICENSE`, `THIRD_PARTY_NOTICES.md`, and `PRIVACY.md` before redistribution or diagnostic sharing.'
+                ].join('\n')
+              })).data;
+            }
+            return String(release.id);
+
+      - name: Upload release assets
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          RELEASE_ID: ${{ steps.draft.outputs.result }}
+          DIST: ${{ env.MYMIX_RELEASE_DIST }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const release_id = Number(process.env.RELEASE_ID);
+            if (!Number.isInteger(release_id)) throw new Error('Draft release ID is invalid.');
+
+            const existing = (await github.rest.repos.listReleaseAssets({ owner, repo, release_id, per_page: 100 })).data;
+            for (const asset of existing) {
+              if (asset.name === 'MyMix-x86.zip' || asset.name === 'SHA256SUMS.txt') {
+                await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+              }
+            }
+
+            for (const [name, contentType] of [['MyMix-x86.zip', 'application/zip'], ['SHA256SUMS.txt', 'text/plain']]) {
+              const file = path.join(process.env.DIST, name);
+              const data = fs.readFileSync(file);
+              await github.request('POST /repos/{owner}/{repo}/releases/{release_id}/assets', {
+                owner, repo, release_id, name,
+                headers: { 'content-type': contentType, 'content-length': data.length },
+                data
+              });
+            }
+
+      - name: Publish validated release
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          RELEASE_ID: ${{ steps.draft.outputs.result }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const release_id = Number(process.env.RELEASE_ID);
+            const assets = (await github.rest.repos.listReleaseAssets({ owner, repo, release_id, per_page: 100 })).data;
+            const names = new Set(assets.map(a => a.name));
+            if (!names.has('MyMix-x86.zip') || !names.has('SHA256SUMS.txt')) {
+              throw new Error('Required release assets are missing; draft will not be published.');
+            }
+            await github.rest.repos.updateRelease({ owner, repo, release_id, draft: false, prerelease: false });
+
+      - name: Clean local release output
+        if: always()
+        shell: powershell
+        run: |
+          Remove-Item '.\Build' -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item '.\EarTrumpet\obj' -Recurse -Force -ErrorAction SilentlyContinue
+          if ($env:MYMIX_RELEASE_DIST) { Remove-Item $env:MYMIX_RELEASE_DIST -Recurse -Force -ErrorAction SilentlyContinue }
+
+      - name: Summary
+        if: always()
+        shell: powershell
+        run: |
+          @(
+            '## MyMix release',
+            '',
+            "Version: v$env:RELEASE_VERSION",
+            'Distribution: GitHub Release assets',
+            'GitHub Actions artifact/cache upload: disabled (0 bytes)',
+            'Release requires source validation, Release/x86 compilation, and startup smoke test before publication.'
+          ) -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
