@@ -39,7 +39,7 @@ jobs:
     runs-on: self-hosted
     env:
       UPSTREAM_REF: ${{ inputs.upstream_ref || 'master' }}
-      FORCE_SYNC: ${{ inputs.force || 'false' }}
+      FORCE_SYNC: ${{ github.event_name == 'push' && 'true' || inputs.force || 'false' }}
 
     steps:
       - name: Checkout MyMix
@@ -187,11 +187,17 @@ jobs:
         if: always()
         shell: powershell
         env:
+          SYNC_OUTCOME: ${{ steps.sync.outcome }}
           CHANGED: ${{ steps.sync.outputs.changed }}
           UPSTREAM_SHA: ${{ steps.sync.outputs.upstream_sha }}
           UPDATE_BRANCH: ${{ steps.publish.outputs.branch }}
           PR_URL: ${{ steps.pr.outputs.result }}
         run: |
+          if ($env:SYNC_OUTCOME -ne 'success') {
+            "## MyMix upstream update`n`nThe EarTrumpet import/MyMix conversion step failed. No update branch was published." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            exit 0
+          }
+
           if ($env:CHANGED -ne 'true') {
             "## MyMix upstream update`n`nNo new EarTrumpet commit was found for the requested ref." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
             exit 0
