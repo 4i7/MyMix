@@ -53,13 +53,14 @@ if ($Optimized) {
     Assert-Contains $peaks 'foreach (var device in AllDevices)'
     Assert-NotMatches $peaks '(?ms)private void UpdatePeakValuesForVisibleSurfaces\(\)\s*\{\s*if \(ShouldSampleAllPeakDevices\)\s*\{\s*UpdatePeakValuesForVisibleSurfaces\(\);'
     Assert-NotMatches $peaks '(?ms)private void UpdatePeakForegroundForVisibleSurfaces\(\)\s*\{\s*if \(ShouldSampleAllPeakDevices\)\s*\{\s*UpdatePeakForegroundForVisibleSurfaces\(\);'
+    Assert-NotMatches $peaks '(?m)for \(var i = 0; i < AllDevices\.Count; i\+\+\) AllDevices\[i\]\.Dispose\(\);\s*\r?\n\s*for \(var i = 0; i < AllDevices\.Count; i\+\+\) AllDevices\[i\]\.Dispose\(\);'
     Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'meter.GetPeakValue()'
     Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'AllocHGlobal'
     Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'GetChannelsPeakValues'
     Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'PeakReleaseFactor = 0.72f'
     foreach ($path in @('EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs','EarTrumpet/UI/Controls/VolumeSlider.cs','EarTrumpet/UI/Views/AppItemView.xaml','EarTrumpet/UI/Views/DeviceView.xaml','EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs')) { Assert-NotContains $path 'PeakValue2' }
 
-    foreach ($marker in @('version=3','peak_meter=30fps-visible-aggregate-smoothed-single-binding','vm_lifetime=explicit-dispose','icon_cache=bounded-frozen','appinfo_cache=per-process','audio_callbacks=coalesced','public_hardening=unbranded-icons-safe-finalizer-smoke-test')) { Assert-Contains '.mymix-optimized' $marker }
+    foreach ($marker in @('version=4','peak_meter=30fps-visible-aggregate-smoothed-single-binding','vm_lifetime=explicit-dispose','icon_cache=bounded-frozen','appinfo_cache=per-process','audio_callbacks=coalesced','public_hardening=unbranded-icons-safe-finalizer-smoke-test','process_watcher=scalable-single-thread-polling')) { Assert-Contains '.mymix-optimized' $marker }
     Assert-Contains 'EarTrumpet/MyMix.csproj' '<DefineConstants>X86</DefineConstants>'
     Assert-Contains 'EarTrumpet/MyMix.csproj' '<DebugType>none</DebugType>'
     foreach ($needle in @('Newtonsoft.Json','XamlAnimatedGif','System.ComponentModel.Composition','Addons\','Extensibility\','CircularBufferTraceListener.cs','FilteredCollectionChain.cs','AudioDeviceChannelCollection.cs','Logo-Dark.png','Logo-Light.png','Icon-Dark.ico','Icon-Light.ico')) { Assert-NotContains 'EarTrumpet/MyMix.csproj' $needle }
@@ -73,6 +74,13 @@ if ($Optimized) {
     Assert-Contains 'EarTrumpet/DataModel/AppInformation/AppInformationFactory.cs' 'ConcurrentDictionary<int, Lazy<IAppInfo>>'
     Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDevice.cs' 'QueueVolumeUiUpdate();'
     Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSession.cs' 'QueueVolumeUiUpdate();'
+
+    # Process lifetime stability: avoid WaitForMultipleObjects' hard handle-count ceiling and
+    # contain exceptions from background callbacks so they cannot terminate the desktop process.
+    Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForMultipleObjects'
+    Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'PollIntervalMilliseconds = 500'
+    Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForSingleObject(data.ProcessHandle, 0)'
+    Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'ProcessWatcherService callback failed'
 
     foreach ($path in @('EarTrumpet/Assets/Icon-Light.ico','EarTrumpet/Assets/Icon-Dark.ico','EarTrumpet/Assets/Welcome.gif','EarTrumpet/Assets/Logo-Dark.png','EarTrumpet/Assets/Logo-Light.png','EarTrumpet/Addons','EarTrumpet/Extensibility','EarTrumpet.ColorTool','EarTrumpet.Package','.chocolatey')) { Assert-PathMissing $path }
     Assert-Contains 'EarTrumpet/App.xaml' '<Application x:Class="EarTrumpet.App"'
