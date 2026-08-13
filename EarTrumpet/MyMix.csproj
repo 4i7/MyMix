@@ -324,8 +324,6 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\Icon-Light.ico" />
-    <Resource Include="Assets\Logo-Dark.png" />
-    <Resource Include="Assets\Logo-Light.png" />
     <Resource Include="Assets\Icon-Dark.ico" />
   </ItemGroup>
   <ItemGroup>

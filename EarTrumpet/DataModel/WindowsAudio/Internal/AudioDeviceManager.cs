@@ -165,9 +165,22 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
             }
         }
 
-        public void UpdatePeakValues()
+        public void UpdatePeakValues(string deviceId = null)
         {
             var snapshot = _peakDeviceSnapshot;
+            if (deviceId != null)
+            {
+                for (var i = 0; i < snapshot.Length; i++)
+                {
+                    if (snapshot[i].Id == deviceId)
+                    {
+                        ((IAudioDeviceInternal)snapshot[i]).UpdatePeakValue();
+                        return;
+                    }
+                }
+                return;
+            }
+
             for (var i = 0; i < snapshot.Length; i++)
             {
                 ((IAudioDeviceInternal)snapshot[i]).UpdatePeakValue();

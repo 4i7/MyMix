@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
 namespace EarTrumpet.DataModel.Audio
 {
@@ -8,6 +8,5 @@ namespace EarTrumpet.DataModel.Audio
         bool IsMuted { get; set; }
         float Volume { get; set; }
         float PeakValue1 { get; }
-        float PeakValue2 { get; }
     }
 }

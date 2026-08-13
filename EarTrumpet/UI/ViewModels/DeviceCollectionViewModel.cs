@@ -117,11 +117,13 @@ namespace EarTrumpet.UI.ViewModels
                     var allExisting = AllDevices.FirstOrDefault(d => d.Id == removed);
                     if (allExisting != null)
                     {
+                        allExisting.Dispose();
                         AllDevices.Remove(allExisting);
                     }
                     break;
 
                 case NotifyCollectionChangedAction.Reset:
+                    for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();
                     AllDevices.Clear();
                     foreach (var device in _deviceManager.Devices)
                     {
@@ -134,6 +136,31 @@ namespace EarTrumpet.UI.ViewModels
             }
         }
 
+        private bool ShouldSampleAllPeakDevices => _isFullWindowVisible || (_isFlyoutVisible && _settings.IsExpanded);
+
+        private void UpdatePeakValuesForVisibleSurfaces()
+        {
+            if (ShouldSampleAllPeakDevices)
+            {
+                UpdatePeakValuesForVisibleSurfaces();
+            }
+            else if (_isFlyoutVisible && Default != null)
+            {
+                _deviceManager.UpdatePeakValues(Default.Id);
+            }
+        }
+
+        private void UpdatePeakForegroundForVisibleSurfaces()
+        {
+            if (ShouldSampleAllPeakDevices)
+            {
+                            UpdatePeakForegroundForVisibleSurfaces();
+            }
+            else if (_isFlyoutVisible)
+            {
+                Default?.UpdatePeakValueForeground();
+            }
+        }
         private void PeakMeterTimer_Elapsed(object sender, ElapsedEventArgs e)
         {
             // Never overlap Core Audio sampling if one frame takes longer than 33 ms.
@@ -144,7 +171,7 @@ namespace EarTrumpet.UI.ViewModels
 
             try
             {
-                _deviceManager.UpdatePeakValues();
+                UpdatePeakValuesForVisibleSurfaces();
 
                 // At most one render-priority UI refresh may be queued. Under temporary UI load we
                 // drop stale frames rather than building an ever-growing Dispatcher backlog.
@@ -154,10 +181,7 @@ namespace EarTrumpet.UI.ViewModels
                     {
                         try
                         {
-                            foreach (var device in AllDevices)
-                            {
-                                device.UpdatePeakValueForeground();
-                            }
+                            UpdatePeakForegroundForVisibleSurfaces();
                         }
                         finally
                         {

@@ -1,4 +1,4 @@
-﻿using EarTrumpet.DataModel;
+using EarTrumpet.DataModel;
 using EarTrumpet.DataModel.Audio;
 using EarTrumpet.DataModel.WindowsAudio;
 using EarTrumpet.Extensions;
@@ -61,7 +61,6 @@ namespace EarTrumpet.UI.ViewModels
         public bool IsDesktopApp { get; }
         public bool IsMovable { get; }
         public float PeakValue1 { get; }
-        public float PeakValue2 { get; }
         public string PersistedOutputDevice => ((IAudioDeviceManagerWindowsAudio)_deviceManager).GetDefaultEndPoint(ProcessId);
         public int ProcessId { get; }
         public IDeviceViewModel Parent { get; }
@@ -101,7 +100,6 @@ namespace EarTrumpet.UI.ViewModels
             IsMovable = app.IsMovable;
             IsExpanded = isChild;
             PeakValue1 = 0;
-            PeakValue2 = 0;
             ProcessId = app.ProcessId;
             Parent = app.Parent;
 

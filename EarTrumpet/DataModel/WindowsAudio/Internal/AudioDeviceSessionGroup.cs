@@ -41,7 +41,6 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
 
         public bool IsSystemSoundsSession => _sessions.Any(s => s.IsSystemSoundsSession);
         public float PeakValue1 => _peakValue1;
-        public float PeakValue2 => _peakValue2;
 
         public int ProcessId => _sessions.Count > 0 ? _sessions[0].ProcessId : -1;
 
@@ -116,24 +115,20 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         {
             var snapshot = _peakSnapshot;
             var peak1 = 0f;
-            var peak2 = 0f;
 
             for (var i = 0; i < snapshot.Length; i++)
             {
                 var session = snapshot[i];
                 ((IAudioDeviceSessionInternal)session).UpdatePeakValueBackground();
                 if (session.PeakValue1 > peak1) peak1 = session.PeakValue1;
-                if (session.PeakValue2 > peak2) peak2 = session.PeakValue2;
             }
 
             _peakValue1 = peak1;
-            _peakValue2 = peak2;
         }
 
         private readonly ObservableCollection<IAudioDeviceSession> _sessions = new ObservableCollection<IAudioDeviceSession>();
         private volatile IAudioDeviceSession[] _peakSnapshot = new IAudioDeviceSession[0];
         private float _peakValue1;
-        private float _peakValue2;
         private string _id;
         private readonly WeakReference<IAudioDevice> _parent;
 

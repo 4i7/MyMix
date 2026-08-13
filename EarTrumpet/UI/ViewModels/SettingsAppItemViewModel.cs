@@ -1,4 +1,4 @@
-﻿using EarTrumpet.DataModel.Audio;
+using EarTrumpet.DataModel.Audio;
 using EarTrumpet.Extensions;
 using System;
 using System.Collections.ObjectModel;
@@ -51,7 +51,6 @@ namespace EarTrumpet.UI.ViewModels
         public bool IsExpanded => false;
         public bool IsMovable => false;
         public float PeakValue1 => 0;
-        public float PeakValue2 => 0;
         public string PersistedOutputDevice => throw new NotImplementedException();
         public int ProcessId => throw new NotImplementedException();
         public IDeviceViewModel Parent => throw new NotImplementedException();

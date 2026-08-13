@@ -16,14 +16,6 @@ namespace EarTrumpet.UI.Controls
         public static readonly DependencyProperty PeakValue1Property = DependencyProperty.Register(
             nameof(PeakValue1), typeof(float), typeof(VolumeSlider), new PropertyMetadata(0f, OnPeakValue1Changed));
 
-        public float PeakValue2
-        {
-            get => (float)GetValue(PeakValue2Property);
-            set => SetValue(PeakValue2Property, value);
-        }
-        public static readonly DependencyProperty PeakValue2Property = DependencyProperty.Register(
-            nameof(PeakValue2), typeof(float), typeof(VolumeSlider), new PropertyMetadata(0f, OnPeakValue2Changed));
-
         private Border _peakMeter1;
         private Border _peakMeter2;
         private Thumb _thumb;
@@ -60,42 +52,26 @@ namespace EarTrumpet.UI.Controls
         protected override void OnValueChanged(double oldValue, double newValue)
         {
             base.OnValueChanged(oldValue, newValue);
-            UpdateBothPeakWidths();
+            UpdatePeakWidth();
         }
 
         private static void OnPeakValue1Changed(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((VolumeSlider)d).UpdatePeak1Width();
-        }
-
-        private static void OnPeakValue2Changed(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((VolumeSlider)d).UpdatePeak2Width();
+            ((VolumeSlider)d).UpdatePeakWidth();
         }
 
         private void RefreshMeterGeometry()
         {
             if (_thumb == null) return;
             _meterWidth = Math.Max(0d, ActualWidth - _thumb.ActualWidth);
-            UpdateBothPeakWidths();
+            UpdatePeakWidth();
         }
 
-        private double PeakScale => Value * 0.01d;
-
-        private void UpdateBothPeakWidths()
+        private void UpdatePeakWidth()
         {
-            UpdatePeak1Width();
-            UpdatePeak2Width();
-        }
-
-        private void UpdatePeak1Width()
-        {
-            if (_peakMeter1 != null) _peakMeter1.Width = _meterWidth * PeakValue1 * PeakScale;
-        }
-
-        private void UpdatePeak2Width()
-        {
-            if (_peakMeter2 != null) _peakMeter2.Width = _meterWidth * PeakValue2 * PeakScale;
+            var width = _meterWidth * PeakValue1 * (Value * 0.01d);
+            if (_peakMeter1 != null) _peakMeter1.Width = width;
+            if (_peakMeter2 != null) _peakMeter2.Width = width;
         }
 
         private void OnTouchDown(object sender, TouchEventArgs e)

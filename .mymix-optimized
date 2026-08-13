@@ -1,6 +1,10 @@
-version=2
-peak_meter=30fps-aggregate-smoothed
+version=3
+peak_meter=30fps-visible-aggregate-smoothed-single-binding
 trace_release=disabled
 addons=removed
 channels=removed
 locales=neutral+ja-JP
+vm_lifetime=explicit-dispose
+icon_cache=bounded-frozen
+appinfo_cache=per-process
+audio_callbacks=coalesced

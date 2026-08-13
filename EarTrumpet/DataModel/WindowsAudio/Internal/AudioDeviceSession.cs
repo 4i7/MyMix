@@ -79,7 +79,6 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         public string IconPath { get; private set; }
         public Guid GroupingParam { get; private set; }
         public float PeakValue1 { get; private set; }
-        public float PeakValue2 { get; private set; }
         public bool IsDesktopApp => _appInfo.IsDesktopApp;
         public string AppId => _appInfo.PackageInstallPath;
 
@@ -132,6 +131,7 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         private bool _isMoved;
         private bool _moveOnInactive;
         private bool _isRegistered;
+        private int _volumeUiUpdatePending;
         private WeakReference<IAudioDevice> _parent;
 
         public AudioDeviceSession(IAudioDevice parent, IAudioSessionControl session, Dispatcher foregroundDispatcher)
@@ -227,7 +227,6 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         {
             var peak = Helpers.ReadPeakValue(_meter);
             PeakValue1 = peak;
-            PeakValue2 = peak;
         }
 
         private void ChooseDisplayName(string displayNameFromSession)
@@ -374,14 +373,19 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
             _volume = NewVolume;
             _displayVolume = _volume.ToDisplayVolume();
             _isMuted = NewMute != 0;
+            QueueVolumeUiUpdate();
+        }
 
-            _dispatcher.BeginInvoke((Action)(() =>
+        private void QueueVolumeUiUpdate()
+        {
+            if (System.Threading.Interlocked.Exchange(ref _volumeUiUpdatePending, 1) != 0) return;
+            _dispatcher.BeginInvoke(DispatcherPriority.DataBind, (Action)(() =>
             {
+                System.Threading.Interlocked.Exchange(ref _volumeUiUpdatePending, 0);
                 RaisePropertyChanged(nameof(Volume));
                 RaisePropertyChanged(nameof(IsMuted));
             }));
         }
-
         void IAudioSessionEvents.OnGroupingParamChanged(ref Guid NewGroupingParam, ref Guid EventContext)
         {
             GroupingParam = NewGroupingParam;

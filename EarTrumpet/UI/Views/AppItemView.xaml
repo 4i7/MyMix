@@ -81,7 +81,6 @@
         </Grid>
         <ctl:VolumeSlider Grid.Column="1" Margin="0,0,16,0"
                           PeakValue1="{Binding PeakValue1}"
-                          PeakValue2="{Binding PeakValue2}"
                           Value="{Binding Volume, Mode=TwoWay}">
             <ctl:VolumeSlider.Style>
                 <Style BasedOn="{StaticResource {x:Type Slider}}" TargetType="Slider">

@@ -10,6 +10,6 @@ namespace EarTrumpet.DataModel.Audio
         IAudioDevice Default { get; set; }
         ObservableCollection<IAudioDevice> Devices { get; }
         string Kind { get; }
-        void UpdatePeakValues();
+        void UpdatePeakValues(string deviceId = null);
     }
 }

@@ -30,6 +30,7 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         private float _displayVolume;
         private bool _isMuted;
         private bool _isRegistered;
+        private int _volumeUiUpdatePending;
         private uint _speakerConfig;
 
         public AudioDevice(IAudioDeviceManager deviceManager, IMMDevice device, Dispatcher foregroundDispatcher)
@@ -82,14 +83,19 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
             _volume = data.fMasterVolume;
             _displayVolume = _volume.ToDisplayVolume();
             _isMuted = data.bMuted != 0;
+            QueueVolumeUiUpdate();
+        }
 
-            _dispatcher.Invoke((Action)(() =>
+        private void QueueVolumeUiUpdate()
+        {
+            if (System.Threading.Interlocked.Exchange(ref _volumeUiUpdatePending, 1) != 0) return;
+            _dispatcher.BeginInvoke(DispatcherPriority.DataBind, (Action)(() =>
             {
+                System.Threading.Interlocked.Exchange(ref _volumeUiUpdatePending, 0);
                 RaisePropertyChanged(nameof(Volume));
                 RaisePropertyChanged(nameof(IsMuted));
             }));
         }
-
         public float Volume
         {
             get => _displayVolume;
@@ -117,7 +123,6 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         }
 
         public float PeakValue1 { get; private set; }
-        public float PeakValue2 { get; private set; }
 
         public bool IsMuted
         {
@@ -165,7 +170,6 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         {
             var peak = Helpers.ReadPeakValue(_meter);
             PeakValue1 = peak;
-            PeakValue2 = peak;
             _sessions.UpdatePeakValues();
         }
 

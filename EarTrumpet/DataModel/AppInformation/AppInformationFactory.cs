@@ -1,24 +1,41 @@
-﻿using EarTrumpet.Interop.Helpers;
+using EarTrumpet.Interop.Helpers;
+using System;
+using System.Collections.Concurrent;
+using System.Threading;
 
 namespace EarTrumpet.DataModel.AppInformation
 {
     public class AppInformationFactory
     {
+        private static readonly ConcurrentDictionary<int, Lazy<IAppInfo>> s_tracked = new ConcurrentDictionary<int, Lazy<IAppInfo>>();
+
         public static IAppInfo CreateForProcess(int processId, bool trackProcess = false)
         {
-            if (processId == 0)
+            if (!trackProcess || processId == 0)
             {
-                return new Internal.SystemSoundsAppInfo();
+                return CreateCore(processId, trackProcess);
             }
 
-            if (Kernel32Helper.IsPackagedProcess(processId))
+            return s_tracked.GetOrAdd(processId, pid => new Lazy<IAppInfo>(
+                () => CreateTracked(pid), LazyThreadSafetyMode.ExecutionAndPublication)).Value;
+        }
+
+        private static IAppInfo CreateTracked(int processId)
+        {
+            var info = CreateCore(processId, true);
+            info.Stopped += _ =>
             {
-                return new Internal.ModernAppInfo(processId, trackProcess);
-            }
-            else
-            {
-                return new Internal.DesktopAppInfo(processId, trackProcess);
-            }
+                s_tracked.TryRemove(processId, out var ignored);
+            };
+            return info;
+        }
+
+        private static IAppInfo CreateCore(int processId, bool trackProcess)
+        {
+            if (processId == 0) return new Internal.SystemSoundsAppInfo();
+            return Kernel32Helper.IsPackagedProcess(processId)
+                ? (IAppInfo)new Internal.ModernAppInfo(processId, trackProcess)
+                : new Internal.DesktopAppInfo(processId, trackProcess);
         }
     }
 }

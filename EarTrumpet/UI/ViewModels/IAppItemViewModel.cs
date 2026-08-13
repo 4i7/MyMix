@@ -1,4 +1,4 @@
-﻿using EarTrumpet.UI.Helpers;
+using EarTrumpet.UI.Helpers;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Media;
@@ -19,7 +19,6 @@ namespace EarTrumpet.UI.ViewModels
         bool IsExpanded { get; }
         bool IsMovable { get; }
         float PeakValue1 { get; }
-        float PeakValue2 { get; }
         string PersistedOutputDevice { get; }
         int ProcessId { get; }
         bool DoesGroupWith(IAppItemViewModel app);
