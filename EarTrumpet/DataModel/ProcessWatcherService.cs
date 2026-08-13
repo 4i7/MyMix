@@ -9,31 +9,75 @@ namespace EarTrumpet.DataModel
 {
     // Tracks process lifetime for audio-session metadata. MyMix polls each process handle from
     // one background thread: no hard batch limit, no per-process worker thread, and sub-second
-    // cleanup latency.
+    // cleanup latency. Each callback has an explicit disposable registration lifetime.
     public class ProcessWatcherService
     {
+        private sealed class CallbackRegistration
+        {
+            public readonly long Id;
+            public readonly Action<int> Callback;
+
+            public CallbackRegistration(long id, Action<int> callback)
+            {
+                Id = id;
+                Callback = callback;
+            }
+        }
+
         private sealed class ProcessWatcherData
         {
             public int ProcessId;
-            public readonly List<Action<int>> QuitActions = new List<Action<int>>();
+            public readonly List<CallbackRegistration> QuitActions = new List<CallbackRegistration>();
             public IntPtr ProcessHandle;
+            public bool Cancelled;
+        }
+
+        private sealed class Registration : IDisposable
+        {
+            private readonly int _processId;
+            private readonly long _registrationId;
+            private int _disposed;
+
+            public Registration(int processId, long registrationId)
+            {
+                _processId = processId;
+                _registrationId = registrationId;
+            }
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+                UnwatchProcess(_processId, _registrationId);
+            }
+        }
+
+        private sealed class EmptyRegistration : IDisposable
+        {
+            public static readonly EmptyRegistration Instance = new EmptyRegistration();
+            private EmptyRegistration() { }
+            public void Dispose() { }
         }
 
         private const int PollIntervalMilliseconds = 500;
         private static readonly object s_lock = new object();
         private static readonly Dictionary<int, ProcessWatcherData> s_watchers = new Dictionary<int, ProcessWatcherData>();
+        private static long s_nextRegistrationId;
         private static bool s_threadRunning;
 
-        public static void WatchProcess(int processId, Action<int> processQuit)
+        public static IDisposable WatchProcess(int processId, Action<int> processQuit)
         {
             if (processQuit == null) throw new ArgumentNullException(nameof(processQuit));
+
+            var registrationId = Interlocked.Increment(ref s_nextRegistrationId);
+            var callbackRegistration = new CallbackRegistration(registrationId, processQuit);
 
             lock (s_lock)
             {
                 if (s_watchers.TryGetValue(processId, out var existing))
                 {
-                    existing.QuitActions.Add(processQuit);
-                    return;
+                    existing.Cancelled = false;
+                    existing.QuitActions.Add(callbackRegistration);
+                    return new Registration(processId, registrationId);
                 }
             }
 
@@ -41,25 +85,26 @@ namespace EarTrumpet.DataModel
             if (handle == IntPtr.Zero)
             {
                 Trace.WriteLine($"ProcessWatcherService OpenProcess failed: {processId}");
-                return;
+                return EmptyRegistration.Instance;
             }
 
             if (Kernel32.WaitForSingleObject(handle, 0) != Kernel32.WAIT_TIMEOUT)
             {
                 Kernel32.CloseHandle(handle);
-                return;
+                return EmptyRegistration.Instance;
             }
 
             var data = new ProcessWatcherData { ProcessId = processId, ProcessHandle = handle };
-            data.QuitActions.Add(processQuit);
+            data.QuitActions.Add(callbackRegistration);
 
             lock (s_lock)
             {
                 if (s_watchers.TryGetValue(processId, out var raced))
                 {
-                    raced.QuitActions.Add(processQuit);
+                    raced.Cancelled = false;
+                    raced.QuitActions.Add(callbackRegistration);
                     Kernel32.CloseHandle(handle);
-                    return;
+                    return new Registration(processId, registrationId);
                 }
 
                 s_watchers.Add(processId, data);
@@ -74,6 +119,31 @@ namespace EarTrumpet.DataModel
                     thread.Start();
                 }
             }
+
+            return new Registration(processId, registrationId);
+        }
+
+        private static void UnwatchProcess(int processId, long registrationId)
+        {
+            lock (s_lock)
+            {
+                if (!s_watchers.TryGetValue(processId, out var data)) return;
+
+                data.QuitActions.RemoveAll(registration => registration.Id == registrationId);
+                if (data.QuitActions.Count == 0)
+                {
+                    // Do not close here. WatcherLoop may already hold a snapshot containing this handle.
+                    data.Cancelled = true;
+                }
+            }
+        }
+
+        private static void CloseWatcherHandle(ProcessWatcherData data)
+        {
+            var handle = data.ProcessHandle;
+            if (handle == IntPtr.Zero) return;
+            data.ProcessHandle = IntPtr.Zero;
+            Kernel32.CloseHandle(handle);
         }
 
         private static void WatcherLoop()
@@ -95,38 +165,49 @@ namespace EarTrumpet.DataModel
                 {
                     var data = snapshot[i];
                     var waitResult = Kernel32.WaitForSingleObject(data.ProcessHandle, 0);
-                    if (waitResult == Kernel32.WAIT_TIMEOUT) continue;
+                    CallbackRegistration[] callbacks = null;
+                    var cancelled = false;
+                    var shouldClose = false;
 
-                    Action<int>[] callbacks = null;
                     lock (s_lock)
                     {
-                        if (s_watchers.TryGetValue(data.ProcessId, out var current) && ReferenceEquals(current, data))
+                        if (!s_watchers.TryGetValue(data.ProcessId, out var current) || !ReferenceEquals(current, data))
+                        {
+                            continue;
+                        }
+
+                        cancelled = data.Cancelled;
+                        if (cancelled)
                         {
                             s_watchers.Remove(data.ProcessId);
-                            callbacks = data.QuitActions.ToArray();
+                            shouldClose = true;
+                        }
+                        else if (waitResult != Kernel32.WAIT_TIMEOUT)
+                        {
+                            s_watchers.Remove(data.ProcessId);
+                            shouldClose = true;
+                            if (waitResult != Kernel32.WAIT_FAILED) callbacks = data.QuitActions.ToArray();
                         }
                     }
 
-                    if (callbacks == null) continue;
+                    if (!shouldClose) continue;
 
                     try
                     {
-                        if (waitResult == Kernel32.WAIT_FAILED)
+                        if (!cancelled && waitResult == Kernel32.WAIT_FAILED)
                         {
                             Trace.WriteLine($"ProcessWatcherService wait failed: {data.ProcessId}");
                         }
-                        else
+                        else if (callbacks != null)
                         {
                             for (var callbackIndex = 0; callbackIndex < callbacks.Length; callbackIndex++)
                             {
                                 try
                                 {
-                                    callbacks[callbackIndex](data.ProcessId);
+                                    callbacks[callbackIndex].Callback(data.ProcessId);
                                 }
                                 catch (Exception ex)
                                 {
-                                    // A background-thread callback must not become an unhandled
-                                    // exception capable of terminating the whole desktop process.
                                     Trace.WriteLine($"ProcessWatcherService callback failed: {ex}");
                                 }
                             }
@@ -134,7 +215,8 @@ namespace EarTrumpet.DataModel
                     }
                     finally
                     {
-                        Kernel32.CloseHandle(data.ProcessHandle);
+                        // Published handles are closed only by this watcher thread after snapshot use.
+                        CloseWatcherHandle(data);
                     }
                 }
 
