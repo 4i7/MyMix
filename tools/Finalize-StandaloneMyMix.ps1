@@ -58,6 +58,20 @@ if ($theme2 -eq $theme -and $theme -match 'new UISettings\(\)') {
 }
 Write-Text $themePath $theme2
 
+# Telemetry is permanently disabled in MyMix, so remove EarTrumpet's old region-based telemetry default helper and its WinRT globalization dependency.
+$settingsPath = 'EarTrumpet/AppSettings.cs'
+$settings = Read-Text $settingsPath
+$telemetryHelperMarker = '        private bool IsTelemetryEnabledByDefault()'
+$helperStart = $settings.IndexOf($telemetryHelperMarker, [StringComparison]::Ordinal)
+if ($helperStart -ge 0) {
+    $classClose = $settings.LastIndexOf('    }', [StringComparison]::Ordinal)
+    if ($classClose -le $helperStart) {
+        throw 'Could not locate AppSettings class closing brace while removing telemetry helper.'
+    }
+    $settings = $settings.Substring(0, $helperStart) + $settings.Substring($classClose)
+    Write-Text $settingsPath $settings
+}
+
 $projectPath = 'EarTrumpet/MyMix.csproj'
 $project = Read-Text $projectPath
 $project = [Regex]::Replace(
@@ -71,11 +85,12 @@ Write-Text $projectPath $project
 Remove-Item -LiteralPath (Resolve-RepoPath 'EarTrumpet/DataModel/Storage/Internal/WindowsStorageSettingsBag.cs') -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath (Resolve-RepoPath 'EarTrumpet/Interop/Helpers/PackageHelper.cs') -Force -ErrorAction SilentlyContinue
 
-# Assert that WinRT package/storage/theme dependencies are gone from the core application.
+# Assert that WinRT package/storage/theme/globalization dependencies are gone from the core application.
 $projectCheck = Read-Text $projectPath
 if ($projectCheck -match '<Reference Include="Windows,') { throw 'Windows.winmd reference still exists in MyMix.csproj.' }
 if ($projectCheck -match 'WindowsStorageSettingsBag|PackageHelper\.cs') { throw 'Packaged-app source files are still compiled.' }
 if ((Read-Text $themePath) -match 'Windows\.UI\.ViewManagement|UISettings') { throw 'WinRT UISettings dependency still exists.' }
 if ((Read-Text $appPath) -match 'PackageHelper\.') { throw 'PackageHelper is still referenced by App.xaml.cs.' }
+if ((Read-Text $settingsPath) -match 'Windows\.Globalization|IsTelemetryEnabledByDefault') { throw 'Legacy telemetry-region WinRT dependency still exists.' }
 
 Write-Host 'Standalone MyMix finalization passed.'
