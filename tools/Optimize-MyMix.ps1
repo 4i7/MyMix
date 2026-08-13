@@ -68,15 +68,18 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/10-appinfo-cache.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/11-audio-callback-coalescing.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/12-resource-trim.ps1')
+. (Resolve-RepoPath 'tools/Optimize-MyMix/13-public-hardening.ps1')
 
-Write-Text '.mymix-optimized' "version=3`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`n"
+Write-Text '.mymix-optimized' "version=3`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`n"
 
 # Final invariants. These are deliberately behavioral, not just file-existence checks.
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'new Timer(1000.0 / 30.0)'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'DispatcherPriority.Render'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'System.Threading.Interlocked.Exchange(ref _peakUpdateRunning, 1)'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'ShouldSampleAllPeakDevices'
+Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' '_deviceManager.UpdatePeakValues();'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' '_deviceManager.UpdatePeakValues(Default.Id)'
+Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'foreach (var device in AllDevices)'
 Assert-NotContains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'using System.Threading;'
 Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'meter.GetPeakValue()'
 Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'AllocHGlobal'
@@ -102,13 +105,23 @@ Assert-NotContains 'EarTrumpet/MyMix.csproj' 'Addons\'
 Assert-NotContains 'EarTrumpet/MyMix.csproj' 'Extensibility\'
 Assert-NotContains 'EarTrumpet/MyMix.csproj' 'Logo-Dark.png'
 Assert-NotContains 'EarTrumpet/MyMix.csproj' 'Logo-Light.png'
+Assert-NotContains 'EarTrumpet/MyMix.csproj' 'Icon-Dark.ico'
+Assert-NotContains 'EarTrumpet/MyMix.csproj' 'Icon-Light.ico'
 Assert-NotContains 'EarTrumpet/App.xaml' 'WelcomeViewModel'
+Assert-NotContains 'EarTrumpet/App.xaml' 'EarTrumpetIconLight'
+Assert-NotContains 'EarTrumpet/App.xaml' 'EarTrumpetIconDark'
 Assert-NotContains 'EarTrumpet/App.xaml.cs' 'RenderMode.SoftwareOnly'
+Assert-Contains 'EarTrumpet/App.xaml.cs' '--smoke-test'
 Assert-NotContains 'EarTrumpet/Diagnosis/SnapshotData.cs' 'AddonManager'
 Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDevice.cs' 'AudioDeviceChannelCollection'
 Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSession.cs' 'AudioDeviceSessionChannelCollection'
+Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSessionCollection.cs' '_sessionManager?.UnregisterSessionNotification(this);'
 Assert-NotContains 'EarTrumpet/AppSettings.cs' 'UseLogarithmicVolume'
 Assert-NotContains 'EarTrumpet/AppSettings.cs' 'UseLegacyIcon'
 Assert-NotContains 'EarTrumpet/AppSettings.cs' 'IsTelemetryEnabled'
+Assert-Contains 'EarTrumpet/UI/Helpers/TaskbarIconSource.cs' 'SystemIcons.Application.Clone()'
+Assert-NotContains 'EarTrumpet/UI/Helpers/TaskbarIconSource.cs' 'IconKind.EarTrumpet'
+Assert-Contains 'EarTrumpet/Interop/Helpers/SingleInstanceAppMutex.cs' 'MYMIX_MUTEX_SUFFIX'
+Assert-NotContains 'EarTrumpet/UI/ViewModels/EarTrumpetAboutPageViewModel.cs' 'intentional local diagnostic crash'
 
-Write-Host 'MyMix deep optimization v4 passed.'
+Write-Host 'MyMix deep optimization and public hardening passed.'
