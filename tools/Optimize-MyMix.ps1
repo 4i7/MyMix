@@ -57,8 +57,9 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/12-resource-trim.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/12b-public-icon-cleanup.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/13-public-hardening.ps1')
+. (Resolve-RepoPath 'tools/Optimize-MyMix/14-runtime-stability.ps1')
 
-Write-Text '.mymix-optimized' "version=3`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`n"
+Write-Text '.mymix-optimized' "version=4`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`nprocess_watcher=scalable-single-thread-polling`n"
 
 # Final invariants. These are deliberately behavioral, not just file-existence checks.
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'new Timer(1000.0 / 30.0)'
@@ -111,5 +112,8 @@ Assert-Contains 'EarTrumpet/UI/Helpers/TaskbarIconSource.cs' 'SystemIcons.Applic
 Assert-NotContains 'EarTrumpet/UI/Helpers/TaskbarIconSource.cs' 'IconKind.EarTrumpet'
 Assert-Contains 'EarTrumpet/Interop/Helpers/SingleInstanceAppMutex.cs' 'MYMIX_MUTEX_SUFFIX'
 Assert-NotContains 'EarTrumpet/UI/ViewModels/EarTrumpetAboutPageViewModel.cs' 'intentional local diagnostic crash'
+Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForMultipleObjects'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'PollIntervalMilliseconds = 500'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'callback failed'
 
-Write-Host 'MyMix deep optimization and public hardening passed.'
+Write-Host 'MyMix deep optimization, public hardening, and runtime stability pass succeeded.'
