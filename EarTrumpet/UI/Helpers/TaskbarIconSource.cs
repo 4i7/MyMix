@@ -28,7 +28,7 @@ namespace EarTrumpet.UI.Helpers
 
         private readonly DeviceCollectionViewModel _collection;
         private bool _isMouseOver;
-        private string _hash;
+        private int? _hash;
         private IconKind _kind;
 
         public TaskbarIconSource(DeviceCollectionViewModel collection)
@@ -130,11 +130,21 @@ namespace EarTrumpet.UI.Helpers
             }
         }
 
-        private string GetHash() =>
-            $"kind={_kind} " +
-            $"{(System.Windows.SystemParameters.HighContrast ? $"hc=true mouse={_isMouseOver} " : "")}" +
-            $"dpi={WindowsTaskbar.Dpi} " +
-            $"isSysLight={SystemSettings.IsSystemLightTheme}";
+        private int GetHash()
+        {
+            unchecked
+            {
+                var hash = (int)_kind;
+                hash = (hash * 397) ^ (int)WindowsTaskbar.Dpi;
+                hash = (hash * 397) ^ (SystemSettings.IsSystemLightTheme ? 1 : 0);
+                hash = (hash * 397) ^ (System.Windows.SystemParameters.HighContrast ? 1 : 0);
+                if (System.Windows.SystemParameters.HighContrast)
+                {
+                    hash = (hash * 397) ^ (_isMouseOver ? 1 : 0);
+                }
+                return hash;
+            }
+        }
 
         // Only fill part of the icon, so we can preserve the red X.
         private static double GetIconFillPercent(IconKind kind) => kind == IconKind.NoDevice ? 0.4 : 1;

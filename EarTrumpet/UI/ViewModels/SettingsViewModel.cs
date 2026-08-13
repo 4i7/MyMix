@@ -1,4 +1,4 @@
-﻿using EarTrumpet.UI.Helpers;
+using EarTrumpet.UI.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -41,12 +41,6 @@ namespace EarTrumpet.UI.ViewModels
             {
                 if (_selected != value)
                 {
-                    if (value != null && value is AdvertisedCategorySettingsViewModel)
-                    {
-                        ((AdvertisedCategorySettingsViewModel)value).Activate();
-                        RaisePropertyChanged(nameof(Selected));
-                        return;
-                    }
 
                     if (_selected != null)
                     {

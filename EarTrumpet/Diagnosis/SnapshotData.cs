@@ -1,5 +1,4 @@
-﻿using EarTrumpet.DataModel;
-using EarTrumpet.Extensibility.Hosting;
+using EarTrumpet.DataModel;
 using EarTrumpet.Interop;
 using EarTrumpet.Interop.Helpers;
 using EarTrumpet.UI.Themes;
@@ -88,7 +87,6 @@ namespace EarTrumpet.Diagnosis
                 {
                     { "systemDpi", () => User32.GetDpiForSystem() },
                     { "taskbarDpi", () => WindowsTaskbar.Dpi },
-                    { "addons", () => AddonManager.GetDiagnosticInfo() },
                     { "region", () =>  new RegionInfo(CultureInfo.CurrentCulture.LCID).TwoLetterISORegionName }
                 };
             }

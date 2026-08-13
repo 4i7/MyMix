@@ -13,9 +13,9 @@ namespace EarTrumpet.DataModel.Storage.Internal
 
         public bool HasKey(string key)
         {
-            using (var regKey = Registry.CurrentUser.CreateSubKey(s_earTrumpetKey, true))
+            using (var regKey = Registry.CurrentUser.OpenSubKey(s_earTrumpetKey, false))
             {
-                return regKey.GetValue(key) != null;
+                return regKey?.GetValue(key) != null;
             }
         }
 
@@ -51,18 +51,18 @@ namespace EarTrumpet.DataModel.Storage.Internal
 
         static T ReadSetting<T>(string key, T defaultValue)
         {
-            using (var regKey = Registry.CurrentUser.CreateSubKey(s_earTrumpetKey, true))
+            using (var regKey = Registry.CurrentUser.OpenSubKey(s_earTrumpetKey, false))
             {
-                T ret = defaultValue;
+                if (regKey == null) return defaultValue;
                 try
                 {
-                    ret = (T)regKey.GetValue(key);
+                    var value = regKey.GetValue(key);
+                    return value == null ? defaultValue : (T)value;
                 }
                 catch (Exception)
                 {
-                    ret = defaultValue;
+                    return defaultValue;
                 }
-                return ret;
             }
         }
 

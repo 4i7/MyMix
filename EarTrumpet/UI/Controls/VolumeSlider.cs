@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -10,26 +10,27 @@ namespace EarTrumpet.UI.Controls
     {
         public float PeakValue1
         {
-            get { return (float)this.GetValue(PeakValue1Property); }
-            set { this.SetValue(PeakValue1Property, value); }
+            get => (float)GetValue(PeakValue1Property);
+            set => SetValue(PeakValue1Property, value);
         }
         public static readonly DependencyProperty PeakValue1Property = DependencyProperty.Register(
-          "PeakValue1", typeof(float), typeof(VolumeSlider), new PropertyMetadata(0f, new PropertyChangedCallback(PeakValueChanged)));
+            nameof(PeakValue1), typeof(float), typeof(VolumeSlider), new PropertyMetadata(0f, OnPeakValue1Changed));
 
         public float PeakValue2
         {
-            get { return (float)this.GetValue(PeakValue2Property); }
-            set { this.SetValue(PeakValue2Property, value); }
+            get => (float)GetValue(PeakValue2Property);
+            set => SetValue(PeakValue2Property, value);
         }
         public static readonly DependencyProperty PeakValue2Property = DependencyProperty.Register(
-          "PeakValue2", typeof(float), typeof(VolumeSlider), new PropertyMetadata(0f, new PropertyChangedCallback(PeakValueChanged)));
+            nameof(PeakValue2), typeof(float), typeof(VolumeSlider), new PropertyMetadata(0f, OnPeakValue2Changed));
 
         private Border _peakMeter1;
         private Border _peakMeter2;
         private Thumb _thumb;
         private Point _lastMousePosition;
+        private double _meterWidth;
 
-        public VolumeSlider() : base()
+        public VolumeSlider()
         {
             PreviewTouchDown += OnTouchDown;
             PreviewMouseDown += OnMouseDown;
@@ -46,124 +47,122 @@ namespace EarTrumpet.UI.Controls
             _thumb = (Thumb)GetTemplateChild("SliderThumb");
             _peakMeter1 = (Border)GetTemplateChild("PeakMeter1");
             _peakMeter2 = (Border)GetTemplateChild("PeakMeter2");
+            RefreshMeterGeometry();
         }
 
         protected override Size ArrangeOverride(Size arrangeBounds)
         {
-            var ret = base.ArrangeOverride(arrangeBounds);
-            SizeOrVolumeOrPeakValueChanged();
-            return ret;
+            var result = base.ArrangeOverride(arrangeBounds);
+            RefreshMeterGeometry();
+            return result;
         }
 
-        private static void PeakValueChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        protected override void OnValueChanged(double oldValue, double newValue)
         {
-            ((VolumeSlider)d).SizeOrVolumeOrPeakValueChanged();
+            base.OnValueChanged(oldValue, newValue);
+            UpdateBothPeakWidths();
         }
 
-        private void SizeOrVolumeOrPeakValueChanged()
+        private static void OnPeakValue1Changed(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (_peakMeter1 != null)
-            {
-                _peakMeter1.Width = Math.Max(0, (ActualWidth - _thumb.ActualWidth) * PeakValue1 * (Value / 100f));
-            }
+            ((VolumeSlider)d).UpdatePeak1Width();
+        }
 
-            if (_peakMeter2 != null)
-            {
-                _peakMeter2.Width = Math.Max(0, (ActualWidth - _thumb.ActualWidth) * PeakValue2 * (Value / 100f));
-            }
+        private static void OnPeakValue2Changed(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            ((VolumeSlider)d).UpdatePeak2Width();
+        }
+
+        private void RefreshMeterGeometry()
+        {
+            if (_thumb == null) return;
+            _meterWidth = Math.Max(0d, ActualWidth - _thumb.ActualWidth);
+            UpdateBothPeakWidths();
+        }
+
+        private double PeakScale => Value * 0.01d;
+
+        private void UpdateBothPeakWidths()
+        {
+            UpdatePeak1Width();
+            UpdatePeak2Width();
+        }
+
+        private void UpdatePeak1Width()
+        {
+            if (_peakMeter1 != null) _peakMeter1.Width = _meterWidth * PeakValue1 * PeakScale;
+        }
+
+        private void UpdatePeak2Width()
+        {
+            if (_peakMeter2 != null) _peakMeter2.Width = _meterWidth * PeakValue2 * PeakScale;
         }
 
         private void OnTouchDown(object sender, TouchEventArgs e)
         {
             VisualStateManager.GoToState((FrameworkElement)sender, "Pressed", true);
-
             SetPositionByControlPoint(e.GetTouchPoint(this).Position);
             CaptureTouch(e.TouchDevice);
-
             e.Handled = true;
         }
 
         private void OnMouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.LeftButton == MouseButtonState.Pressed)
-            {
-                _lastMousePosition = e.GetPosition(this);
-                VisualStateManager.GoToState((FrameworkElement)sender, "Pressed", true);
-
-                if (!_thumb.IsMouseOver)
-                {
-                    SetPositionByControlPoint(_lastMousePosition);
-                }
-
-                CaptureMouse();
-                e.Handled = true;
-            }
+            if (e.LeftButton != MouseButtonState.Pressed) return;
+            _lastMousePosition = e.GetPosition(this);
+            VisualStateManager.GoToState((FrameworkElement)sender, "Pressed", true);
+            if (_thumb != null && !_thumb.IsMouseOver) SetPositionByControlPoint(_lastMousePosition);
+            CaptureMouse();
+            e.Handled = true;
         }
 
         private void OnTouchUp(object sender, TouchEventArgs e)
         {
             VisualStateManager.GoToState((FrameworkElement)sender, "Normal", true);
-
             ReleaseTouchCapture(e.TouchDevice);
             e.Handled = true;
         }
 
         private void OnMouseUp(object sender, MouseButtonEventArgs e)
         {
-            if (IsMouseCaptured)
+            if (!IsMouseCaptured) return;
+            if (!new Rect(0, 0, ActualWidth, ActualHeight).Contains(e.GetPosition(this)))
             {
-                // If the point is outside of the control, clear the hover state.
-                Rect rcSlider = new Rect(0, 0, ActualWidth, ActualHeight);
-                if (!rcSlider.Contains(e.GetPosition(this)))
-                {
-                    VisualStateManager.GoToState((FrameworkElement)sender, "Normal", true);
-                }
-
-                ReleaseMouseCapture();
-                e.Handled = true;
+                VisualStateManager.GoToState((FrameworkElement)sender, "Normal", true);
             }
+            ReleaseMouseCapture();
+            e.Handled = true;
         }
 
         private void OnTouchMove(object sender, TouchEventArgs e)
         {
-            if (AreAnyTouchesCaptured)
-            {
-                SetPositionByControlPoint(e.GetTouchPoint(this).Position);
-                e.Handled = true;
-            }
+            if (!AreAnyTouchesCaptured) return;
+            SetPositionByControlPoint(e.GetTouchPoint(this).Position);
+            e.Handled = true;
         }
 
         private void OnMouseMove(object sender, MouseEventArgs e)
         {
+            if (!IsMouseCaptured) return;
             var mousePosition = e.GetPosition(this);
-            if (IsMouseCaptured && mousePosition != _lastMousePosition)
-            {
-                _lastMousePosition = mousePosition;
-                SetPositionByControlPoint(e.GetPosition(this));
-            }
+            if (mousePosition == _lastMousePosition) return;
+            _lastMousePosition = mousePosition;
+            SetPositionByControlPoint(mousePosition);
         }
 
         private void OnMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            var amount = Math.Sign(e.Delta) * 2.0;
-            ChangePositionByAmount(amount);
+            ChangePositionByAmount(Math.Sign(e.Delta) * 2.0);
             e.Handled = true;
         }
 
         public void SetPositionByControlPoint(Point point)
         {
-            var percent = point.X / ActualWidth;
-            Value = Bound((Maximum - Minimum) * percent);
+            if (ActualWidth <= 0) return;
+            Value = Bound((Maximum - Minimum) * (point.X / ActualWidth));
         }
 
-        public void ChangePositionByAmount(double amount)
-        {
-            Value = Bound(Value + amount);
-        }
-
-        public double Bound(double val)
-        {
-            return Math.Max(Minimum, Math.Min(Maximum, val));
-        }
+        public void ChangePositionByAmount(double amount) => Value = Bound(Value + amount);
+        public double Bound(double val) => Math.Max(Minimum, Math.Min(Maximum, val));
     }
 }

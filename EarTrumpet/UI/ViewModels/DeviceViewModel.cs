@@ -1,4 +1,4 @@
-﻿using EarTrumpet.DataModel.Audio;
+using EarTrumpet.DataModel.Audio;
 using EarTrumpet.DataModel.WindowsAudio;
 using EarTrumpet.Extensions;
 using System;
@@ -20,6 +20,7 @@ namespace EarTrumpet.UI.ViewModels
         }
 
         public static readonly DisplayNameComparer CompareByDisplayName = new DisplayNameComparer();
+        private static readonly bool s_isWindows11 = Environment.OSVersion.IsAtLeast(OSVersions.Windows11);
 
         public enum DeviceIconKind
         {
@@ -128,7 +129,7 @@ namespace EarTrumpet.UI.ViewModels
             }
             else
             {
-                var isOnWindows11 = Environment.OSVersion.IsAtLeast(OSVersions.Windows11);
+                var isOnWindows11 = s_isWindows11;
                 if (_device.IsMuted)
                 {
                     IconKind = DeviceIconKind.Mute;

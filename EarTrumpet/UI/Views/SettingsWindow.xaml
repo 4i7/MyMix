@@ -196,48 +196,6 @@
                            Text="{Binding Title}" />
             </Grid>
         </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:AddonAboutPageViewModel}">
-            <StackPanel Orientation="Vertical">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Style="{StaticResource BodyText}" Text="{x:Static resx:Resources.AddonNameText}" />
-                    <TextBlock Grid.Row="1"
-                               Style="{StaticResource BodyText}"
-                               Text="{x:Static resx:Resources.PublisherText}" />
-                    <TextBlock Grid.Row="2"
-                               Style="{StaticResource BodyText}"
-                               Text="{x:Static resx:Resources.VersionText}" />
-
-                    <TextBlock Grid.Column="1"
-                               Style="{StaticResource BodySubText}"
-                               Text="{Binding DisplayName}" />
-                    <TextBlock Grid.Row="1"
-                               Grid.Column="1"
-                               Style="{StaticResource BodySubText}"
-                               Text="{Binding PublisherName}" />
-                    <TextBlock Grid.Row="2"
-                               Grid.Column="1"
-                               Style="{StaticResource BodySubText}"
-                               Text="{Binding Version}" />
-                </Grid>
-                <TextBlock Style="{StaticResource HyperlinkBlock}"><Hyperlink Command="{Binding OpenHelpLink}">
-                        <Run Text="{x:Static resx:Resources.WebsiteText}" />
-                    </Hyperlink></TextBlock>
-
-                <TextBlock Style="{StaticResource HeadingText}" Text="{x:Static resx:Resources.AddonUninstallTitle}" />
-                <TextBlock Style="{StaticResource BodyText}" Text="{x:Static resx:Resources.AddonUninstallDescriptionText}" />
-                <Button Command="{Binding Uninstall}" Content="{x:Static resx:Resources.AddonUninstallButtonText}" />
-            </StackPanel>
-        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:SettingsCategoryViewModel}">
             <Grid PreviewMouseRightButtonDown="{Event:HandledBinding}">
                 <Grid.Style>

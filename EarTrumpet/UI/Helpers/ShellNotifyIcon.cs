@@ -1,4 +1,4 @@
-﻿using EarTrumpet.DataModel;
+using EarTrumpet.DataModel;
 using EarTrumpet.Extensions;
 using EarTrumpet.Interop;
 using EarTrumpet.Interop.Helpers;
@@ -204,7 +204,6 @@ namespace EarTrumpet.UI.Helpers
                     break;
                 case User32.WM_MOUSEMOVE:
                     OnNotifyIconMouseMove();
-                    IconSource.CheckForUpdate();
                     break;
             }
         }

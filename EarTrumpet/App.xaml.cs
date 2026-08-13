@@ -42,7 +42,6 @@ namespace EarTrumpet
 
         private void OnAppStartup(object sender, StartupEventArgs e)
         {
-            RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
 
             Exit += (_, __) => IsShuttingDown = true;
             HasIdentity = false;
@@ -94,9 +93,6 @@ namespace EarTrumpet
 
         private void CompleteStartup()
         {
-#if DEBUG
-            DebugHelpers.Add();
-#endif
             _mixerWindow = new WindowHolder(CreateMixerExperience);
             _settingsWindow = new WindowHolder(CreateSettingsExperience);
 
@@ -113,8 +109,6 @@ namespace EarTrumpet
             _trayIcon.Scrolled += trayIconScrolled;
             _trayIcon.SetTooltip(CollectionViewModel.GetTrayToolTip());
             _trayIcon.IsVisible = true;
-
-            DisplayFirstRunExperience();
         }
 
         private void trayIconScrolled(object _, int wheelDelta)
@@ -129,13 +123,6 @@ namespace EarTrumpet
             }
         }
 
-        private void DisplayFirstRunExperience()
-        {
-            if (!Settings.HasShownFirstRun)
-            {
-                Settings.HasShownFirstRun = true;
-            }
-        }
         private bool IsCriticalFontLoadFailure(Exception ex)
         {
             return ex.StackTrace.Contains("MS.Internal.Text.TextInterface.FontFamily.GetFirstMatchingFont") ||
@@ -156,7 +143,6 @@ namespace EarTrumpet
                     MessageBoxResult.OK) == MessageBoxResult.OK)
                 {
                     Trace.WriteLine($"App OnCriticalFontLoadFailure OK");
-                    ProcessHelper.StartNoThrow("https://eartrumpet.app/jmp/fixfonts");
                 }
                 Environment.Exit(0);
             }).Start();

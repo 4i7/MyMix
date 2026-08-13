@@ -1,4 +1,4 @@
-﻿using EarTrumpet.DataModel.Audio;
+using EarTrumpet.DataModel.Audio;
 using EarTrumpet.Interop.MMDeviceAPI;
 using System;
 using System.Collections.Generic;
@@ -15,6 +15,7 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
 
         private readonly Dispatcher _dispatcher;
         private readonly ObservableCollection<IAudioDeviceSession> _sessions = new ObservableCollection<IAudioDeviceSession>();
+        private volatile IAudioDeviceSession[] _peakSnapshot = new IAudioDeviceSession[0];
         private readonly List<IAudioDeviceSession> _movedSessions = new List<IAudioDeviceSession>();
         private IAudioSessionManager2 _sessionManager;
         private WeakReference<IAudioDevice> _parent;
@@ -122,9 +123,18 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
                 }
 
                 _sessions.Add(new AudioDeviceSessionGroup(parent, new AudioDeviceSessionGroup(parent, session)));
+                _peakSnapshot = _sessions.ToArray();
             }
         }
 
+        public void UpdatePeakValues()
+        {
+            var snapshot = _peakSnapshot;
+            for (var i = 0; i < snapshot.Length; i++)
+            {
+                ((IAudioDeviceSessionInternal)snapshot[i]).UpdatePeakValueBackground();
+            }
+        }
         internal void UnHideSessionsForProcessId(int processId)
         {
             foreach (var session in _movedSessions.ToArray())  // Use snapshot since enumeration will be modified.
@@ -179,6 +189,7 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
                 if (!appGroup.Sessions.Any())
                 {
                     _sessions.Remove(appGroup);
+                    _peakSnapshot = _sessions.ToArray();
                     break;
                 }
             }

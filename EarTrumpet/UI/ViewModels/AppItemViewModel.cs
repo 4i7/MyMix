@@ -1,4 +1,4 @@
-﻿using EarTrumpet.DataModel.Audio;
+using EarTrumpet.DataModel.Audio;
 using EarTrumpet.DataModel.WindowsAudio.Internal;
 using EarTrumpet.DataModel.WindowsAudio;
 using EarTrumpet.Extensions;
@@ -26,7 +26,19 @@ namespace EarTrumpet.UI.ViewModels
         public static readonly ExeNameComparer CompareByExeName = new ExeNameComparer();
 
         public Color Background { get; private set; }
-        public char IconText => string.IsNullOrWhiteSpace(DisplayName) ? '?' : DisplayName.ToUpperInvariant().FirstOrDefault(x => char.IsLetterOrDigit(x));
+        public char IconText
+        {
+            get
+            {
+                var name = DisplayName;
+                if (string.IsNullOrWhiteSpace(name)) return '?';
+                foreach (var c in name)
+                {
+                    if (char.IsLetterOrDigit(c)) return char.ToUpperInvariant(c);
+                }
+                return '?';
+            }
+        }
         public string DisplayName => _session.DisplayName;
         public string ExeName => _session.ExeName;
         public string AppId => _session.AppId;

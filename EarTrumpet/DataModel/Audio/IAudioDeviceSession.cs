@@ -1,12 +1,10 @@
-﻿using EarTrumpet.DataModel.WindowsAudio;
-using System.Collections.Generic;
+using EarTrumpet.DataModel.WindowsAudio;
 using System.Collections.ObjectModel;
 
 namespace EarTrumpet.DataModel.Audio
 {
     public interface IAudioDeviceSession : IStreamWithVolumeControl
     {
-        IEnumerable<IAudioDeviceSessionChannel> Channels { get; }
         IAudioDevice Parent { get; }
         string DisplayName { get; }
         string ExeName { get; }

@@ -1,4 +1,4 @@
-﻿using EarTrumpet.DataModel.Audio;
+using EarTrumpet.DataModel.Audio;
 using EarTrumpet.Diagnosis;
 using EarTrumpet.Extensions;
 using EarTrumpet.Interop;
@@ -17,7 +17,7 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         public event EventHandler<IAudioDevice> DefaultChanged;
         public event EventHandler Loaded;
 
-        public ObservableCollection<IAudioDevice> Devices { get; }
+        public ObservableCollection<IAudioDevice> Devices => _devices;
         public string Kind => _kind.ToString();
 
         public IAudioDevice Default
@@ -44,16 +44,14 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         private readonly AudioDeviceKind _kind;
         private readonly AudioPolicyConfig _policyConfigService;
         private readonly ConcurrentDictionary<string, IAudioDevice> _deviceMap = new ConcurrentDictionary<string, IAudioDevice>();
-        private readonly FilteredCollectionChain<IAudioDevice> _deviceFilter;
         private readonly ObservableCollection<IAudioDevice> _devices = new ObservableCollection<IAudioDevice>();
+        private volatile IAudioDevice[] _peakDeviceSnapshot = new IAudioDevice[0];
 
         public AudioDeviceManager(AudioDeviceKind kind)
         {
             _kind = kind;
             _dispatcher = Dispatcher.CurrentDispatcher;
             _policyConfigService = new AudioPolicyConfig(Flow);
-            _deviceFilter = new FilteredCollectionChain<IAudioDevice>(_devices, _dispatcher);
-            Devices = _deviceFilter.Items;
 
             TraceLine($"Create");
 
@@ -169,9 +167,10 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
 
         public void UpdatePeakValues()
         {
-            foreach (var device in _devices.ToArray())
+            var snapshot = _peakDeviceSnapshot;
+            for (var i = 0; i < snapshot.Length; i++)
             {
-                ((IAudioDeviceInternal)device).UpdatePeakValue();
+                ((IAudioDeviceInternal)snapshot[i]).UpdatePeakValue();
             }
         }
 
@@ -293,16 +292,12 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
             return null;
         }
 
-        public void AddFilter(Func<ObservableCollection<IAudioDevice>, ObservableCollection<IAudioDevice>> filter)
-        {
-            _deviceFilter.AddFilter(filter);
-        }
-
         private void Add(IAudioDevice device)
         {
             if (_deviceMap.TryAdd(device.Id, device))
             {
                 _devices.Add(device);
+                _peakDeviceSnapshot = _devices.ToArray();
             }
         }
 
@@ -311,6 +306,7 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
             if (_deviceMap.TryRemove(device.Id, out var foundDevice))
             {
                 _devices.Remove(device);
+                _peakDeviceSnapshot = _devices.ToArray();
             }
         }
 

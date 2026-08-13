@@ -1,4 +1,4 @@
-﻿using EarTrumpet.DataModel.Audio;
+using EarTrumpet.DataModel.Audio;
 using EarTrumpet.DataModel.WindowsAudio;
 using EarTrumpet.Extensions;
 using System;
@@ -29,6 +29,8 @@ namespace EarTrumpet.UI.ViewModels
         private readonly Dispatcher _currentDispatcher = Dispatcher.CurrentDispatcher;
         private bool _isFlyoutVisible;
         private bool _isFullWindowVisible;
+        private int _peakUpdateRunning;
+        private int _peakUiUpdatePending;
 
         public DeviceCollectionViewModel(IAudioDeviceManager deviceManager, AppSettings settings)
         {
@@ -38,7 +40,7 @@ namespace EarTrumpet.UI.ViewModels
             _deviceManager.Devices.CollectionChanged += OnCollectionChanged;
             OnCollectionChanged(null, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
 
-            _peakMeterTimer = new Timer(1000 / 30); // 30 fps
+            _peakMeterTimer = new Timer(1000.0 / 30.0); // fixed 30 FPS target
             _peakMeterTimer.AutoReset = true;
             _peakMeterTimer.Elapsed += PeakMeterTimer_Elapsed;
         }
@@ -83,11 +85,11 @@ namespace EarTrumpet.UI.ViewModels
         private void OnDefaultDevicePropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == DefaultDeviceChangedProperty ||
-                e.PropertyName == nameof(Default.Volume) ||
+                e.PropertyName == nameof(Default.IconKind) ||
                 e.PropertyName == nameof(Default.IsMuted) ||
                 e.PropertyName == nameof(Default.DisplayName))
             {
-                TrayPropertyChanged.Invoke();
+                TrayPropertyChanged?.Invoke();
             }
         }
 
@@ -134,15 +136,40 @@ namespace EarTrumpet.UI.ViewModels
 
         private void PeakMeterTimer_Elapsed(object sender, ElapsedEventArgs e)
         {
-            _deviceManager.UpdatePeakValues();
-
-            _currentDispatcher.BeginInvoke((Action)(() =>
+            // Never overlap Core Audio sampling if one frame takes longer than 33 ms.
+            if (System.Threading.Interlocked.Exchange(ref _peakUpdateRunning, 1) != 0)
             {
-                foreach (var device in AllDevices)
+                return;
+            }
+
+            try
+            {
+                _deviceManager.UpdatePeakValues();
+
+                // At most one render-priority UI refresh may be queued. Under temporary UI load we
+                // drop stale frames rather than building an ever-growing Dispatcher backlog.
+                if (System.Threading.Interlocked.Exchange(ref _peakUiUpdatePending, 1) == 0)
                 {
-                    device.UpdatePeakValueForeground();
+                    _currentDispatcher.BeginInvoke(DispatcherPriority.Render, (Action)(() =>
+                    {
+                        try
+                        {
+                            foreach (var device in AllDevices)
+                            {
+                                device.UpdatePeakValueForeground();
+                            }
+                        }
+                        finally
+                        {
+                            System.Threading.Interlocked.Exchange(ref _peakUiUpdatePending, 0);
+                        }
+                    }));
                 }
-            }));
+            }
+            finally
+            {
+                System.Threading.Interlocked.Exchange(ref _peakUpdateRunning, 0);
+            }
         }
 
         public void MoveAppToDevice(IAppItemViewModel app, DeviceViewModel dev)
@@ -238,38 +265,32 @@ namespace EarTrumpet.UI.ViewModels
 
         public string GetTrayToolTip()
         {
-            if (Default != null)
-            {
-                var stateText = Default.IsMuted ? Properties.Resources.MutedText : $"{Default.Volume}%";
-                var prefixText = $"EarTrumpet: {stateText} - ";
-                var deviceName = $"{Default.DeviceDescription} ({Default.EnumeratorName})";
-
-                // Remote Audio devices may not contain an enumerator name or description.
-
-                if (string.IsNullOrWhiteSpace(Default.EnumeratorName))
-                {
-                    deviceName = Default.DeviceDescription;
-                }
-
-                if (string.IsNullOrWhiteSpace(Default.DeviceDescription) && string.IsNullOrWhiteSpace(Default.EnumeratorName))
-                {
-                    deviceName = Default.DisplayName;
-                }
-
-                // Device name could be null in transient error cases
-                if (deviceName == null)
-                {
-                    deviceName = "";
-                }
-
-                // API Limitation: "less than 64 chars" for the tooltip.
-                deviceName = deviceName.Substring(0, Math.Min(63 - prefixText.Length, deviceName.Length));
-                return prefixText + deviceName;
-            }
-            else
+            if (Default == null)
             {
                 return Properties.Resources.NoDeviceTrayText;
             }
+
+            var deviceName = $"{Default.DeviceDescription} ({Default.EnumeratorName})";
+            if (string.IsNullOrWhiteSpace(Default.EnumeratorName))
+            {
+                deviceName = Default.DeviceDescription;
+            }
+            if (string.IsNullOrWhiteSpace(Default.DeviceDescription) && string.IsNullOrWhiteSpace(Default.EnumeratorName))
+            {
+                deviceName = Default.DisplayName;
+            }
+            deviceName = deviceName ?? string.Empty;
+
+            // MyMix intentionally avoids numeric volume text; the tray only updates when the
+            // mute/icon bucket or device identity changes, not for every slider tick.
+            var stateText = Default.IsMuted ? $"{Properties.Resources.MutedText} - " : string.Empty;
+            var prefixText = $"MyMix: {stateText}";
+            var maxDeviceNameLength = Math.Max(0, 63 - prefixText.Length);
+            if (deviceName.Length > maxDeviceNameLength)
+            {
+                deviceName = deviceName.Substring(0, maxDeviceNameLength);
+            }
+            return prefixText + deviceName;
         }
     }
 }

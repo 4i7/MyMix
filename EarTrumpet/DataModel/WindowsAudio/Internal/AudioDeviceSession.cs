@@ -30,26 +30,26 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
 
         public float Volume
         {
-            get => _volume.ToDisplayVolume();
+            get => _displayVolume;
             set
             {
-                value = value.Bound(0, 1f);
-                value = value.ToLogVolume();
+                var displayVolume = value.Bound(0, 1f);
+                var rawVolume = displayVolume.ToLogVolume();
 
-                if (_volume != value)
+                if (_volume != rawVolume)
                 {
                     try
                     {
-                        _volume = value;
+                        _volume = rawVolume;
+                        _displayVolume = displayVolume;
                         Guid dummy = Guid.Empty;
-                        _simpleVolume.SetMasterVolume(value, ref dummy);
+                        _simpleVolume.SetMasterVolume(rawVolume, ref dummy);
                     }
                     catch (Exception ex) when (ex.Is(HRESULT.AUDCLNT_E_DEVICE_INVALIDATED))
                     {
-                        // Expected in some cases.
                     }
 
-                    IsMuted = _volume <= (1 / 100f).ToLogVolume();
+                    IsMuted = _volume <= FloatExtensions.MuteThreshold;
                 }
             }
         }
@@ -117,7 +117,6 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         public bool IsSystemSoundsSession { get; }
 
         public ObservableCollection<IAudioDeviceSession> Children { get; private set; }
-        public IEnumerable<IAudioDeviceSessionChannel> Channels => _channels.Channels;
 
         private readonly string _id;
         private readonly IAudioSessionControl _session;
@@ -125,8 +124,8 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         private readonly IAudioMeterInformation _meter;
         private readonly Dispatcher _dispatcher;
         private readonly IAppInfo _appInfo;
-        private readonly AudioDeviceSessionChannelCollection _channels;
         private float _volume;
+        private float _displayVolume;
         private AudioSessionState _state;
         private bool _isMuted;
         private bool _isDisconnected;
@@ -141,10 +140,10 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
             _session = session;
             _meter = (IAudioMeterInformation)_session;
             _simpleVolume = (ISimpleAudioVolume)session;
-            _channels = new AudioDeviceSessionChannelCollection((IChannelAudioVolume)session, _dispatcher);
             _state = _session.GetState();
             GroupingParam = _session.GetGroupingParam();
             _simpleVolume.GetMasterVolume(out _volume);
+            _displayVolume = _volume.ToDisplayVolume();
             _isMuted = _simpleVolume.GetMute() != 0;
             IsSystemSoundsSession = ((IAudioSessionControl2)_session).IsSystemSoundsSession() == HRESULT.S_OK;
             ProcessId = ReadProcessId();
@@ -226,9 +225,9 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
 
         public void UpdatePeakValueBackground()
         {
-            var newValues = Helpers.ReadPeakValues(_meter);
-            PeakValue1 = newValues[0];
-            PeakValue2 = newValues[1];
+            var peak = Helpers.ReadPeakValue(_meter);
+            PeakValue1 = peak;
+            PeakValue2 = peak;
         }
 
         private void ChooseDisplayName(string displayNameFromSession)
@@ -373,6 +372,7 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
         void IAudioSessionEvents.OnSimpleVolumeChanged(float NewVolume, int NewMute, ref Guid EventContext)
         {
             _volume = NewVolume;
+            _displayVolume = _volume.ToDisplayVolume();
             _isMuted = NewMute != 0;
 
             _dispatcher.BeginInvoke((Action)(() =>
@@ -428,13 +428,7 @@ namespace EarTrumpet.DataModel.WindowsAudio.Internal
 
         void IAudioSessionEvents.OnChannelVolumeChanged(uint ChannelCount, IntPtr afNewChannelVolume, uint ChangedChannel, ref Guid EventContext)
         {
-            var channelVolumesValues = new float[ChannelCount];
-            Marshal.Copy(afNewChannelVolume, channelVolumesValues, 0, (int)ChannelCount);
-
-            for (var i = 0; i < ChannelCount; i++)
-            {
-                _channels.Channels[i].SetLevel(channelVolumesValues[i]);
-            }
+            // Per-channel control is intentionally not modeled by MyMix.
         }
 
         void IAudioSessionEvents.OnIconPathChanged(string NewIconPath, ref Guid EventContext)

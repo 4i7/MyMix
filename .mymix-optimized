@@ -1,0 +1,6 @@
+version=2
+peak_meter=30fps-aggregate-smoothed
+trace_release=disabled
+addons=removed
+channels=removed
+locales=neutral+ja-JP
