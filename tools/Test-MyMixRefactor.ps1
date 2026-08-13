@@ -113,26 +113,39 @@ else {
     Assert-NotContains 'EarTrumpet/App.xaml.cs' 'AddonManager.Host'
 }
 
-foreach ($workflow in @('.github/workflows/apply-mymix.yml', '.github/workflows/update-from-eartrumpet.yml', '.github/workflows/release.yml')) {
+# All workflows must avoid Actions artifact/cache storage, use current Node 24 actions pinned by
+# commit SHA, and share the same smoke-test implementation so diagnostics cannot drift.
+$workflows = @('.github/workflows/apply-mymix.yml', '.github/workflows/update-from-eartrumpet.yml', '.github/workflows/release.yml')
+foreach ($workflow in $workflows) {
     Assert-NotContains $workflow 'actions/upload-artifact'
     Assert-NotContains $workflow 'actions/cache'
     Assert-NotContains $workflow 'deleteArtifact'
     Assert-NotContains $workflow 'actions: write'
-    Assert-Contains $workflow 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262'
-    Assert-Contains $workflow 'NuGet/setup-nuget@d105a947828025cd7a980103c35ba2bfae586d0f'
-    Assert-Contains $workflow 'microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce'
+    Assert-Contains $workflow 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+    Assert-Contains $workflow 'NuGet/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123'
+    Assert-Contains $workflow 'microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57'
     Assert-Contains $workflow 'Smoke test MyMix startup'
+    Assert-Contains $workflow '.\tools\Smoke-TestMyMix.ps1'
 }
-Assert-NotMatches '.github/workflows/update-from-eartrumpet.yml' '(?m)^\s*schedule\s*:'
-Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'tools/Optimize-MyMix/**'
-Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b'
 
-# Release distribution is maintainer-only, reads provenance directly from the committed marker,
-# uses GitHub Release assets only, and publishes only after both the ZIP and checksum exist.
-Assert-Contains '.github/workflows/release.yml' "name: Release MyMix"
+Assert-Contains '.github/workflows/apply-mymix.yml' 'group: mymix-source-maintenance'
+Assert-NotMatches '.github/workflows/apply-mymix.yml' '(?m)^\s*push\s*:'
+Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'group: mymix-source-maintenance'
+Assert-NotMatches '.github/workflows/update-from-eartrumpet.yml' '(?m)^\s*schedule\s*:'
+foreach ($path in @('.github/workflows/apply-mymix.yml','.github/workflows/update-from-eartrumpet.yml','.github/workflows/release.yml','tools/Optimize-MyMix/**','tools/Test-MyMixRefactor.ps1','tools/Smoke-TestMyMix.ps1')) {
+    Assert-Contains '.github/workflows/update-from-eartrumpet.yml' $path
+}
+Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3'
+
+# Release distribution is an explicit maintainer action only. It reads provenance directly from
+# the committed marker, uses GitHub's release upload_url, publishes only after both assets exist,
+# and never uses Actions artifact/cache storage for distribution.
+Assert-Contains '.github/workflows/release.yml' 'name: Release MyMix'
 Assert-NotMatches '.github/workflows/release.yml' '(?m)^\s*push\s*:'
+Assert-Contains '.github/workflows/release.yml' 'workflow_dispatch:'
 Assert-Contains '.github/workflows/release.yml' "fs.readFileSync('.mymix-converted', 'utf8')"
 Assert-NotContains '.github/workflows/release.yml' 'UPSTREAM_SHA='
+Assert-Contains '.github/workflows/release.yml' 'release.upload_url'
 Assert-Contains '.github/workflows/release.yml' 'MyMix-x86.zip'
 Assert-Contains '.github/workflows/release.yml' 'SHA256SUMS.txt'
 Assert-Contains '.github/workflows/release.yml' "'LICENSE', 'README.md', 'PRIVACY.md', 'THIRD_PARTY_NOTICES.md'"
@@ -141,7 +154,7 @@ Assert-Contains '.github/workflows/release.yml' 'draft: false'
 Assert-Contains '.github/workflows/release.yml' 'Required release assets are missing; draft will not be published.'
 Assert-NotContains '.github/workflows/release.yml' 'MyMix.pdb'
 Assert-NotContains '.github/workflows/release.yml' 'upload-artifact'
-Assert-Contains '.github/workflows/release.yml' 'actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b'
+Assert-Contains '.github/workflows/release.yml' 'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3'
 Assert-PathMissing '.github/workflows/repair-v1-release.yml'
 
 if ($Failures.Count -gt 0) {
