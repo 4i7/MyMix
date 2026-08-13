@@ -14,40 +14,27 @@ function Resolve-RepoPath([string]$RelativePath) {
 
 function Read-Text([string]$RelativePath) {
     $path = Resolve-RepoPath $RelativePath
-    if (-not (Test-Path -LiteralPath $path)) {
-        throw "Required file not found: $RelativePath"
-    }
+    if (-not (Test-Path -LiteralPath $path)) { throw "Required file not found: $RelativePath" }
     [IO.File]::ReadAllText($path)
 }
 
 function Write-Text([string]$RelativePath, [string]$Content) {
     $path = Resolve-RepoPath $RelativePath
     $dir = Split-Path -Parent $path
-    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     [IO.File]::WriteAllText($path, $Content, $Utf8NoBom)
 }
 
-function Remove-Path([string]$RelativePath) {
-    Remove-Item -LiteralPath (Resolve-RepoPath $RelativePath) -Recurse -Force -ErrorAction SilentlyContinue
-}
-
+function Remove-Path([string]$RelativePath) { Remove-Item -LiteralPath (Resolve-RepoPath $RelativePath) -Recurse -Force -ErrorAction SilentlyContinue }
 function Replace-RegexOptional([string]$RelativePath, [string]$Pattern, [string]$Replacement) {
     $text = Read-Text $RelativePath
     Write-Text $RelativePath ([regex]::Replace($text, $Pattern, $Replacement, $RegexSingleline))
 }
-
 function Assert-Contains([string]$RelativePath, [string]$Needle) {
-    if (-not (Read-Text $RelativePath).Contains($Needle)) {
-        throw "$RelativePath is missing optimizer invariant: $Needle"
-    }
+    if (-not (Read-Text $RelativePath).Contains($Needle)) { throw "$RelativePath is missing optimizer invariant: $Needle" }
 }
-
 function Assert-NotContains([string]$RelativePath, [string]$Needle) {
-    if ((Read-Text $RelativePath).Contains($Needle)) {
-        throw "$RelativePath still contains optimizer-forbidden content: $Needle"
-    }
+    if ((Read-Text $RelativePath).Contains($Needle)) { throw "$RelativePath still contains optimizer-forbidden content: $Needle" }
 }
 
 # Stages are intentionally split by concern so an upstream EarTrumpet change fails at
@@ -68,6 +55,7 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/10-appinfo-cache.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/11-audio-callback-coalescing.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/12-resource-trim.ps1')
+. (Resolve-RepoPath 'tools/Optimize-MyMix/12b-public-icon-cleanup.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/13-public-hardening.ps1')
 
 Write-Text '.mymix-optimized' "version=3`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`n"
