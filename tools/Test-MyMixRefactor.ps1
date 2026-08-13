@@ -75,8 +75,15 @@ if ($Optimized) {
     Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSession.cs' 'QueueVolumeUiUpdate();'
 
     foreach ($path in @('EarTrumpet/Assets/Icon-Light.ico','EarTrumpet/Assets/Icon-Dark.ico','EarTrumpet/Assets/Welcome.gif','EarTrumpet/Assets/Logo-Dark.png','EarTrumpet/Assets/Logo-Light.png','EarTrumpet/Addons','EarTrumpet/Extensibility','EarTrumpet.ColorTool','EarTrumpet.Package','.chocolatey')) { Assert-PathMissing $path }
+    Assert-Contains 'EarTrumpet/App.xaml' '<Application x:Class="EarTrumpet.App"'
+    Assert-Contains 'EarTrumpet/App.xaml' '<Application.Resources>'
+    Assert-Contains 'EarTrumpet/App.xaml' '</Application>'
     Assert-NotContains 'EarTrumpet/App.xaml' 'EarTrumpetIconLight'
     Assert-NotContains 'EarTrumpet/App.xaml' 'EarTrumpetIconDark'
+    Assert-Contains 'EarTrumpet/UI/Views/FlyoutWindow.xaml' '<Window x:Class="EarTrumpet.UI.Views.FlyoutWindow"'
+    Assert-NotContains 'EarTrumpet/UI/Views/FlyoutWindow.xaml' 'EarTrumpetIconLight'
+    Assert-NotContains 'EarTrumpet/UI/Views/FlyoutWindow.xaml' 'EarTrumpetIconDark'
+    Assert-Contains 'EarTrumpet/UI/Views/FlyoutWindow.xaml' 'Title="MyMix"'
     Assert-NotContains 'EarTrumpet/UI/Helpers/TaskbarIconSource.cs' 'IconKind.EarTrumpet'
     Assert-Contains 'EarTrumpet/UI/Helpers/TaskbarIconSource.cs' 'SystemIcons.Application.Clone()'
     Assert-NotContains 'EarTrumpet/UI/ViewModels/EarTrumpetAboutPageViewModel.cs' 'intentional local diagnostic crash'
