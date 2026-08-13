@@ -1,4 +1,4 @@
-﻿using EarTrumpet.Interop;
+using EarTrumpet.Interop;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,123 +7,138 @@ using System.Threading;
 
 namespace EarTrumpet.DataModel
 {
-    // Monitors a list of processes by Process Id.
-    // Uses a single background thread to monitor N processes for quit.
+    // Tracks process lifetime for audio-session metadata. MyMix polls each process handle from
+    // one background thread: no hard batch limit, no per-process worker thread, and sub-second
+    // cleanup latency.
     public class ProcessWatcherService
     {
-        class ProcessWatcherData
+        private sealed class ProcessWatcherData
         {
-            public int processId;
-            public List<Action<int>> quitActions = new List<Action<int>>();
-            public IntPtr processHandle;
+            public int ProcessId;
+            public readonly List<Action<int>> QuitActions = new List<Action<int>>();
+            public IntPtr ProcessHandle;
         }
 
-        private static readonly object _lock = new object();
-
-        // Protected by _lock.
+        private const int PollIntervalMilliseconds = 500;
+        private static readonly object s_lock = new object();
         private static readonly Dictionary<int, ProcessWatcherData> s_watchers = new Dictionary<int, ProcessWatcherData>();
-        // Protected by _lock.
-        private static bool _threadRunning;
+        private static bool s_threadRunning;
 
         public static void WatchProcess(int processId, Action<int> processQuit)
         {
-            var data = new ProcessWatcherData
-            {
-                processId = processId,
-                processHandle = Kernel32.OpenProcess(Kernel32.ProcessFlags.SYNCHRONIZE, false, processId)
-            };
-            data.quitActions.Add(processQuit);
+            if (processQuit == null) throw new ArgumentNullException(nameof(processQuit));
 
-            if (Kernel32.WaitForSingleObject(data.processHandle, 0) != Kernel32.WAIT_TIMEOUT)
+            lock (s_lock)
             {
-                Trace.WriteLine($"ProcessWatcherService WatchProcess Error: Unwatchable handle: {processId}");
-                Kernel32.CloseHandle(data.processHandle);
+                if (s_watchers.TryGetValue(processId, out var existing))
+                {
+                    existing.QuitActions.Add(processQuit);
+                    return;
+                }
+            }
+
+            var handle = Kernel32.OpenProcess(Kernel32.ProcessFlags.SYNCHRONIZE, false, processId);
+            if (handle == IntPtr.Zero)
+            {
+                Trace.WriteLine($"ProcessWatcherService OpenProcess failed: {processId}");
                 return;
             }
 
-            lock (_lock)
+            if (Kernel32.WaitForSingleObject(handle, 0) != Kernel32.WAIT_TIMEOUT)
             {
-                if (s_watchers.ContainsKey(processId))
-                {
-                    // We lost the race, add our callback and clean up.
-                    s_watchers[processId].quitActions.Add(processQuit);
-                    Kernel32.CloseHandle(data.processHandle);
-                }
-                else
-                {
-                    // Transfer ownership
-                    s_watchers.Add(processId, data);
-                }
+                Kernel32.CloseHandle(handle);
+                return;
             }
 
-            EnsureWatcherThreadRunning();
+            var data = new ProcessWatcherData { ProcessId = processId, ProcessHandle = handle };
+            data.QuitActions.Add(processQuit);
+
+            lock (s_lock)
+            {
+                if (s_watchers.TryGetValue(processId, out var raced))
+                {
+                    raced.QuitActions.Add(processQuit);
+                    Kernel32.CloseHandle(handle);
+                    return;
+                }
+
+                s_watchers.Add(processId, data);
+                if (!s_threadRunning)
+                {
+                    s_threadRunning = true;
+                    var thread = new Thread(WatcherLoop)
+                    {
+                        IsBackground = true,
+                        Name = "MyMix Process Watcher"
+                    };
+                    thread.Start();
+                }
+            }
         }
 
-        private static void EnsureWatcherThreadRunning()
+        private static void WatcherLoop()
         {
-            bool needsNewThread;
-            lock (_lock)
+            while (true)
             {
-                needsNewThread = !_threadRunning;
-                if (needsNewThread)
+                ProcessWatcherData[] snapshot;
+                lock (s_lock)
                 {
-                    _threadRunning = true;
-                }
-            }
-
-            if (needsNewThread)
-            {
-                new Thread(() =>
-                {
-                    Thread.CurrentThread.IsBackground = true;
-
-                    bool quit = false;
-                    while (_threadRunning && !quit)
+                    if (s_watchers.Count == 0)
                     {
-                        IntPtr[] handles;
-                        lock (_lock)
+                        s_threadRunning = false;
+                        return;
+                    }
+                    snapshot = s_watchers.Values.ToArray();
+                }
+
+                for (var i = 0; i < snapshot.Length; i++)
+                {
+                    var data = snapshot[i];
+                    var waitResult = Kernel32.WaitForSingleObject(data.ProcessHandle, 0);
+                    if (waitResult == Kernel32.WAIT_TIMEOUT) continue;
+
+                    Action<int>[] callbacks = null;
+                    lock (s_lock)
+                    {
+                        if (s_watchers.TryGetValue(data.ProcessId, out var current) && ReferenceEquals(current, data))
                         {
-                            handles = s_watchers.Select(w => w.Value.processHandle).ToArray();
-                        }
-
-                        var returnValue = Kernel32.WaitForMultipleObjects(handles.Length, handles, false, (int)TimeSpan.FromSeconds(5).TotalMilliseconds);
-                        switch(returnValue)
-                        {
-                            // We never expect to see WAIT_ABANDONED since we are only waiting on process handles.
-                            case Kernel32.WAIT_ABANDONED:
-                            // We don't expect WAIT_FAILED here since we did a test WaitForSingleObject on each handle before ingestion.
-                            case Kernel32.WAIT_FAILED:
-                                Debug.Assert(false);
-                                // Avoid creating an infintite loop if we end up with a bad handle causing WAIT_FAILED.
-                                Thread.Sleep(TimeSpan.FromSeconds(5));
-                                break;
-                            case Kernel32.WAIT_TIMEOUT:
-                                // Go again
-                                break;
-                            default:
-                                ProcessWatcherData data;
-                                lock (_lock)
-                                {
-                                    var handle = handles[returnValue];
-                                    data = s_watchers.First(w => w.Value.processHandle == handle).Value;
-
-                                    s_watchers.Remove(data.processId);
-                                    _threadRunning = s_watchers.Count > 0;
-                                    quit = !_threadRunning;
-                                }
-
-                                Trace.WriteLine($"ProcessWatcherService Quit: {data.processId}");
-
-                                foreach (var act in data.quitActions)
-                                {
-                                    act(data.processId);
-                                }
-
-                                Kernel32.CloseHandle(data.processHandle);
-                                break;
+                            s_watchers.Remove(data.ProcessId);
+                            callbacks = data.QuitActions.ToArray();
                         }
                     }
-                }).Start();
+
+                    if (callbacks == null) continue;
+
+                    try
+                    {
+                        if (waitResult == Kernel32.WAIT_FAILED)
+                        {
+                            Trace.WriteLine($"ProcessWatcherService wait failed: {data.ProcessId}");
+                        }
+                        else
+                        {
+                            for (var callbackIndex = 0; callbackIndex < callbacks.Length; callbackIndex++)
+                            {
+                                try
+                                {
+                                    callbacks[callbackIndex](data.ProcessId);
+                                }
+                                catch (Exception ex)
+                                {
+                                    // A background-thread callback must not become an unhandled
+                                    // exception capable of terminating the whole desktop process.
+                                    Trace.WriteLine($"ProcessWatcherService callback failed: {ex}");
+                                }
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        Kernel32.CloseHandle(data.ProcessHandle);
+                    }
+                }
+
+                Thread.Sleep(PollIntervalMilliseconds);
             }
         }
     }

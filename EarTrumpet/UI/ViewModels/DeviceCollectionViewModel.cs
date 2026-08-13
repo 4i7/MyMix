@@ -124,7 +124,6 @@ namespace EarTrumpet.UI.ViewModels
 
                 case NotifyCollectionChangedAction.Reset:
                    for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();
-                     for (var i = 0; i < AllDevices.Count; i++) AllDevices[i].Dispose();
                     AllDevices.Clear();
                     foreach (var device in _deviceManager.Devices)
                     {

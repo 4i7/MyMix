@@ -1,4 +1,4 @@
-version=3
+version=4
 peak_meter=30fps-visible-aggregate-smoothed-single-binding
 trace_release=disabled
 addons=removed
@@ -9,3 +9,4 @@ icon_cache=bounded-frozen
 appinfo_cache=per-process
 audio_callbacks=coalesced
 public_hardening=unbranded-icons-safe-finalizer-smoke-test
+process_watcher=scalable-single-thread-polling
