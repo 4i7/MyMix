@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up NuGet
         uses: NuGet/setup-nuget@v2
@@ -22,9 +24,39 @@ jobs:
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Convert source to MyMix and validate Release x86 build
+      - name: Provide legacy master ref for upstream GitVersion
         shell: powershell
-        run: .\tools\Convert-ToMyMix.ps1
+        run: git branch --force master HEAD
+
+      - name: Convert source to MyMix
+        shell: powershell
+        run: .\tools\Convert-ToMyMix.ps1 -SkipBuild
+
+      - name: Restore MyMix application packages
+        shell: powershell
+        run: |
+          nuget restore .\EarTrumpet\MyMix.csproj -PackagesDirectory .\packages
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate MyMix Release x86 application build
+        shell: powershell
+        run: |
+          msbuild .\EarTrumpet\MyMix.csproj /m /p:Configuration=Release /p:Platform=x86
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate package project when Desktop Bridge build tools are installed
+        shell: powershell
+        run: |
+          $vswhere = "$env:ProgramFiles(x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installPath = & $vswhere -products * -requires Microsoft.Component.MSBuild -property installationPath -latest
+          $desktopBridge = Join-Path $installPath 'MSBuild\Microsoft\DesktopBridge\Microsoft.DesktopBridge.props'
+          if (Test-Path $desktopBridge) {
+            msbuild .\EarTrumpet.Package\MyMix.Package.wapproj /m /p:Configuration=Release /p:Platform=x86
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          else {
+            Write-Warning "Desktop Bridge build tools are not installed; package-project validation is skipped. Install the Visual Studio WinUI/UWP application development build tools to enable it."
+          }
 
       - name: Commit converted source
         shell: powershell
