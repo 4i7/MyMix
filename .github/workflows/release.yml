@@ -8,11 +8,6 @@ on:
         required: true
         default: '1.0.0'
         type: string
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/release.yml
 
 permissions:
   contents: write
@@ -58,9 +53,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $marker = [IO.File]::ReadAllText('.\.mymix-converted')
-          $upstream = [regex]::Match($marker, '(?m)^upstream=File-New-Project/EarTrumpet@([0-9a-f]{40})$')
-          if (-not $upstream.Success) { throw 'Recorded EarTrumpet upstream SHA was not found.' }
-          "UPSTREAM_SHA=$($upstream.Groups[1].Value)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if ($marker -notmatch '(?m)^upstream=File-New-Project/EarTrumpet@[0-9a-f]{40}$') {
+            throw 'Recorded EarTrumpet upstream SHA was not found.'
+          }
 
       - name: Prepare portable .NET Framework 4.6.2 reference assemblies
         shell: powershell
@@ -116,7 +111,6 @@ jobs:
           Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $zip -CompressionLevel Optimal
           $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  MyMix-x86.zip" | Set-Content -LiteralPath (Join-Path $dist 'SHA256SUMS.txt') -Encoding ascii
-
           "MYMIX_RELEASE_DIST=$dist" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "MyMix-x86.zip SHA256: $hash"
 
@@ -126,13 +120,17 @@ jobs:
         with:
           result-encoding: string
           script: |
+            const fs = require('fs');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const tag = `v${process.env.RELEASE_VERSION}`;
+            const marker = fs.readFileSync('.mymix-converted', 'utf8');
+            const upstream = marker.match(/^upstream=File-New-Project\/EarTrumpet@([0-9a-f]{40})$/m);
+            if (!upstream) throw new Error('Recorded EarTrumpet upstream SHA was not found.');
             const body = [
               'MyMix is an independent, unofficial derivative of EarTrumpet.',
               '',
-              `EarTrumpet upstream: \`${process.env.UPSTREAM_SHA}\``,
+              `EarTrumpet upstream: \`${upstream[1]}\``,
               'Build: standalone Windows x86 / .NET Framework 4.6.2 target',
               'Privacy: no automatic telemetry, crash-report upload, or feedback upload',
               '',
@@ -149,19 +147,10 @@ jobs:
                 core.setFailed(`${tag} is already published; refusing to overwrite it.`);
                 return;
               }
-              release = (await github.rest.repos.updateRelease({
-                owner, repo, release_id: release.id,
-                target_commitish: context.sha,
-                name: `MyMix ${process.env.RELEASE_VERSION}`,
-                body, draft: true, prerelease: false
-              })).data;
+              release = (await github.rest.repos.updateRelease({ owner, repo, release_id: release.id, target_commitish: context.sha, name: `MyMix ${process.env.RELEASE_VERSION}`, body, draft: true, prerelease: false })).data;
             } catch (error) {
               if (error.status !== 404) throw error;
-              release = (await github.rest.repos.createRelease({
-                owner, repo, tag_name: tag, target_commitish: context.sha,
-                name: `MyMix ${process.env.RELEASE_VERSION}`,
-                body, draft: true, prerelease: false
-              })).data;
+              release = (await github.rest.repos.createRelease({ owner, repo, tag_name: tag, target_commitish: context.sha, name: `MyMix ${process.env.RELEASE_VERSION}`, body, draft: true, prerelease: false })).data;
             }
             return String(release.id);
 
@@ -177,15 +166,12 @@ jobs:
             const repo = context.repo.repo;
             const release_id = Number(process.env.RELEASE_ID);
             if (!Number.isInteger(release_id)) throw new Error('Draft release ID is invalid.');
-
             const release = (await github.rest.repos.getRelease({ owner, repo, release_id })).data;
             if (!release.draft) throw new Error('Refusing to replace assets on a published release.');
 
             const existing = (await github.rest.repos.listReleaseAssets({ owner, repo, release_id, per_page: 100 })).data;
             for (const asset of existing) {
-              if (asset.name === 'MyMix-x86.zip' || asset.name === 'SHA256SUMS.txt') {
-                await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
-              }
+              if (asset.name === 'MyMix-x86.zip' || asset.name === 'SHA256SUMS.txt') await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
             }
 
             const uploadBase = release.upload_url.replace('{?name,label}', '');
@@ -193,11 +179,7 @@ jobs:
               const file = path.join(process.env.MYMIX_RELEASE_DIST, name);
               const data = fs.readFileSync(file);
               const url = `${uploadBase}?name=${encodeURIComponent(name)}`;
-              await github.request({
-                method: 'POST', url,
-                headers: { 'content-type': contentType, 'content-length': data.length },
-                data
-              });
+              await github.request({ method: 'POST', url, headers: { 'content-type': contentType, 'content-length': data.length }, data });
             }
 
       - name: Publish validated release
@@ -211,9 +193,7 @@ jobs:
             const release_id = Number(process.env.RELEASE_ID);
             const assets = (await github.rest.repos.listReleaseAssets({ owner, repo, release_id, per_page: 100 })).data;
             const names = new Set(assets.map(a => a.name));
-            if (!names.has('MyMix-x86.zip') || !names.has('SHA256SUMS.txt')) {
-              throw new Error('Required release assets are missing; draft will not be published.');
-            }
+            if (!names.has('MyMix-x86.zip') || !names.has('SHA256SUMS.txt')) throw new Error('Required release assets are missing; draft will not be published.');
             await github.rest.repos.updateRelease({ owner, repo, release_id, draft: false, prerelease: false });
 
       - name: Clean local release output
