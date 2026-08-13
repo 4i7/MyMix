@@ -34,8 +34,6 @@ Assert-NotContains 'EarTrumpet/UI/ViewModels/EarTrumpetAboutPageViewModel.cs' 'F
 
 $Optimized = Test-Path -LiteralPath (RepoPath '.mymix-optimized')
 if ($Optimized) {
-    # Public docs/provenance are asserted only after Update-FromEarTrumpet has restored MyMix-owned
-    # documentation following the legacy converter's compatibility README step.
     foreach ($doc in @('README.md', 'PRIVACY.md', 'COMPILING.md', 'CONTRIBUTING.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md', 'LICENSE', 'UPSTREAM_README.md')) { Assert-PathExists $doc }
     Assert-Contains 'README.md' 'not an official EarTrumpet release'
     Assert-Contains 'README.md' 'retains the upstream [LICENSE](LICENSE) verbatim'
@@ -46,7 +44,6 @@ if ($Optimized) {
 
     foreach ($name in @('UseLegacyIcon', 'IsTelemetryEnabled', 'UseLogarithmicVolume', 'HasShownFirstRun')) { Assert-NotContains 'EarTrumpet/AppSettings.cs' $name }
 
-    # Peak meter: fixed 30 FPS target, aggregate reads, visible-device scoping, no recursive helpers.
     $peaks = 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs'
     Assert-Contains $peaks 'new Timer(1000.0 / 30.0)'
     Assert-Contains $peaks 'DispatcherPriority.Render'
@@ -63,7 +60,6 @@ if ($Optimized) {
     Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'PeakReleaseFactor = 0.72f'
     foreach ($path in @('EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs','EarTrumpet/UI/Controls/VolumeSlider.cs','EarTrumpet/UI/Views/AppItemView.xaml','EarTrumpet/UI/Views/DeviceView.xaml','EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs')) { Assert-NotContains $path 'PeakValue2' }
 
-    # Runtime/output size and lifetime invariants.
     foreach ($marker in @('version=3','peak_meter=30fps-visible-aggregate-smoothed-single-binding','vm_lifetime=explicit-dispose','icon_cache=bounded-frozen','appinfo_cache=per-process','audio_callbacks=coalesced','public_hardening=unbranded-icons-safe-finalizer-smoke-test')) { Assert-Contains '.mymix-optimized' $marker }
     Assert-Contains 'EarTrumpet/MyMix.csproj' '<DefineConstants>X86</DefineConstants>'
     Assert-Contains 'EarTrumpet/MyMix.csproj' '<DebugType>none</DebugType>'
@@ -79,7 +75,6 @@ if ($Optimized) {
     Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDevice.cs' 'QueueVolumeUiUpdate();'
     Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSession.cs' 'QueueVolumeUiUpdate();'
 
-    # Public hardening and crash resistance.
     foreach ($path in @('EarTrumpet/Assets/Icon-Light.ico','EarTrumpet/Assets/Icon-Dark.ico','EarTrumpet/Assets/Welcome.gif','EarTrumpet/Assets/Logo-Dark.png','EarTrumpet/Assets/Logo-Light.png','EarTrumpet/Addons','EarTrumpet/Extensibility','EarTrumpet.ColorTool','EarTrumpet.Package','.chocolatey')) { Assert-PathMissing $path }
     Assert-NotContains 'EarTrumpet/App.xaml' 'EarTrumpetIconLight'
     Assert-NotContains 'EarTrumpet/App.xaml' 'EarTrumpetIconDark'
@@ -106,13 +101,21 @@ else {
     Assert-NotContains 'EarTrumpet/App.xaml.cs' 'AddonManager.Host'
 }
 
-# Until workflow hardening is committed, no Actions artifact/cache uploads are allowed and the
-# existing purge guard must remain. This assertion is tightened again by the workflow-hardening commit.
+# Public CI policy: no Actions artifact/cache storage, no artifact-delete permission, no automatic
+# upstream schedule on the persistent self-hosted runner, and third-party actions pinned by SHA.
 foreach ($workflow in @('.github/workflows/apply-mymix.yml', '.github/workflows/update-from-eartrumpet.yml')) {
     Assert-NotContains $workflow 'actions/upload-artifact'
     Assert-NotContains $workflow 'actions/cache'
-    Assert-Contains $workflow 'deleteArtifact'
+    Assert-NotContains $workflow 'deleteArtifact'
+    Assert-NotContains $workflow 'actions: write'
+    Assert-Contains $workflow 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262'
+    Assert-Contains $workflow 'NuGet/setup-nuget@d105a947828025cd7a980103c35ba2bfae586d0f'
+    Assert-Contains $workflow 'microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce'
+    Assert-Contains $workflow 'Smoke test MyMix startup'
 }
+Assert-NotContains '.github/workflows/update-from-eartrumpet.yml' 'schedule:'
+Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'tools/Optimize-MyMix/**'
+Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b'
 
 if ($Failures.Count -gt 0) {
     Write-Host 'MyMix refactor validation failed:' -ForegroundColor Red
