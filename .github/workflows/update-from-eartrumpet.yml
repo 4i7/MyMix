@@ -1,0 +1,206 @@
+name: Update MyMix from EarTrumpet
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: EarTrumpet branch, tag, or commit to import
+        required: true
+        default: master
+        type: string
+      force:
+        description: Rebuild the MyMix patch even when the upstream SHA is unchanged
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # Monday 03:17 JST. A self-hosted runner can pick the job up when it is online.
+    - cron: '17 18 * * 0'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: mymix-eartrumpet-upstream
+  cancel-in-progress: false
+
+jobs:
+  update-build-propose:
+    runs-on: self-hosted
+    env:
+      UPSTREAM_REF: ${{ inputs.upstream_ref || 'master' }}
+      FORCE_SYNC: ${{ inputs.force || 'false' }}
+
+    steps:
+      - name: Checkout MyMix
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Import EarTrumpet and reapply MyMix patch
+        id: sync
+        shell: powershell
+        run: |
+          if ($env:FORCE_SYNC -eq 'true') {
+            .\tools\Update-FromEarTrumpet.ps1 -UpstreamRef $env:UPSTREAM_REF -Force
+          }
+          else {
+            .\tools\Update-FromEarTrumpet.ps1 -UpstreamRef $env:UPSTREAM_REF
+          }
+
+      - name: Restore MyMix application packages
+        if: steps.sync.outputs.changed == 'true'
+        shell: powershell
+        run: |
+          nuget restore .\EarTrumpet\MyMix.csproj -PackagesDirectory .\packages
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Prepare portable .NET Framework 4.6.2 reference assemblies
+        if: steps.sync.outputs.changed == 'true'
+        shell: powershell
+        run: |
+          Remove-Item .\refasm -Recurse -Force -ErrorAction SilentlyContinue
+          nuget install Microsoft.NETFramework.ReferenceAssemblies.net462 -Version 1.0.3 -DirectDownload -ExcludeVersion -OutputDirectory .\refasm
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $packageRoot = (Resolve-Path '.\refasm\Microsoft.NETFramework.ReferenceAssemblies.net462').Path
+          $mscorlib = Get-ChildItem $packageRoot -Recurse -Filter mscorlib.dll | Select-Object -First 1
+          if (-not $mscorlib) { throw 'mscorlib.dll was not found in the net462 reference-assemblies package.' }
+
+          $frameworkVersionDir = $mscorlib.Directory.FullName
+          $frameworkIdentifierDir = Split-Path $frameworkVersionDir -Parent
+          $targetFrameworkRoot = (Split-Path $frameworkIdentifierDir -Parent) + '\'
+          Write-Host "Portable net462 reference assemblies: $frameworkVersionDir"
+          "MYMIX_TARGET_FRAMEWORK_ROOT=$targetFrameworkRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Validate MyMix Release x86 application build
+        if: steps.sync.outputs.changed == 'true'
+        shell: powershell
+        run: |
+          msbuild .\EarTrumpet\MyMix.csproj /m /p:Configuration=Release /p:Platform=x86 /p:TargetFrameworkRootPath="$env:MYMIX_TARGET_FRAMEWORK_ROOT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload validated MyMix build
+        if: steps.sync.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyMix-EarTrumpet-${{ steps.sync.outputs.upstream_short }}-Release-x86
+          path: Build/Release/**
+          if-no-files-found: error
+
+      - name: Commit validated update branch
+        if: steps.sync.outputs.changed == 'true'
+        id: publish
+        shell: powershell
+        env:
+          UPSTREAM_SHA: ${{ steps.sync.outputs.upstream_sha }}
+          UPSTREAM_SHORT: ${{ steps.sync.outputs.upstream_short }}
+        run: |
+          $branch = "mymix/upstream-$env:UPSTREAM_SHORT"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B $branch
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          git add -A
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            throw 'The upstream refresh reported changes, but there is nothing to commit.'
+          }
+
+          git commit -m "Update MyMix from EarTrumpet $env:UPSTREAM_SHORT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          git push --force origin "HEAD:refs/heads/$branch"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          "branch=$branch" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Open or update MyMix upstream pull request
+        if: steps.sync.outputs.changed == 'true'
+        id: pr
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          UPDATE_BRANCH: ${{ steps.publish.outputs.branch }}
+          UPSTREAM_SHA: ${{ steps.sync.outputs.upstream_sha }}
+          UPSTREAM_REF: ${{ steps.sync.outputs.upstream_ref }}
+        with:
+          result-encoding: string
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const head = process.env.UPDATE_BRANCH;
+
+            const existing = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${head}`,
+              base: 'main',
+              per_page: 10,
+            });
+
+            if (existing.data.length > 0) {
+              return existing.data[0].html_url;
+            }
+
+            const shortSha = process.env.UPSTREAM_SHA.slice(0, 12);
+            const created = await github.rest.pulls.create({
+              owner,
+              repo,
+              head,
+              base: 'main',
+              title: `Update MyMix from EarTrumpet ${shortSha}`,
+              body: [
+                'Automated EarTrumpet upstream refresh.',
+                '',
+                `Upstream ref: \`${process.env.UPSTREAM_REF}\``,
+                `Upstream commit: \`${process.env.UPSTREAM_SHA}\``,
+                '',
+                'The current MyMix transformation and standalone finalization were reapplied from a clean upstream tree, static validation passed, and the Release x86 build succeeded on the self-hosted runner.',
+                '',
+                'Review any upstream behavior/UI changes before merging this PR into `main`.'
+              ].join('\n'),
+            });
+
+            return created.data.html_url;
+
+      - name: Write update summary
+        if: always()
+        shell: powershell
+        env:
+          CHANGED: ${{ steps.sync.outputs.changed }}
+          UPSTREAM_SHA: ${{ steps.sync.outputs.upstream_sha }}
+          UPDATE_BRANCH: ${{ steps.publish.outputs.branch }}
+          PR_URL: ${{ steps.pr.outputs.result }}
+        run: |
+          if ($env:CHANGED -ne 'true') {
+            "## MyMix upstream update`n`nNo new EarTrumpet commit was found for the requested ref." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            exit 0
+          }
+
+          $lines = @(
+            '## MyMix upstream update',
+            '',
+            "EarTrumpet commit: ``$env:UPSTREAM_SHA``",
+            "Validated branch: ``$env:UPDATE_BRANCH``",
+            'Release x86 build: passed'
+          )
+
+          if ($env:PR_URL) {
+            $lines += "Pull request: $env:PR_URL"
+          }
+          else {
+            $lines += 'Pull request creation was unavailable; the validated update branch was still pushed.'
+          }
+
+          $lines -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
