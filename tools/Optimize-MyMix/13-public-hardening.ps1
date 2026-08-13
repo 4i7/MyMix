@@ -15,7 +15,7 @@ Remove-Path 'EarTrumpet/Assets/Icon-Dark.ico'
 
 $appXamlPath = 'EarTrumpet/App.xaml'
 $appXaml = Read-Text $appXamlPath
-$appXaml = [regex]::Replace($appXaml, '(?m)^\s*<bcl:String x:Key="EarTrumpetIcon(?:Light|Dark)">.*?</bcl:String>\r?\n', '')
+$appXaml = [regex]::Replace($appXaml, '\s*<bcl:String\s+x:Key="EarTrumpetIcon(?:Light|Dark)">[^<]*</bcl:String>', '')
 Write-Text $appXamlPath $appXaml
 
 Write-Text 'EarTrumpet/UI/Helpers/TaskbarIconSource.cs' @'
