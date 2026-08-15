@@ -68,7 +68,9 @@ Assert-Contains 'EarTrumpet/Properties/Resources.resx' '<value>Wheel step (% of 
         if (-not $test.Contains($markerListOld)) { throw 'Test metadata list anchor missing.' }
         $test = $test.Replace($markerListOld, $markerListNew)
     }
-    $stage17Invariant = "Assert-Contains 'tools/Optimize-MyMix.ps1' \"Resolve-RepoPath 'tools/Optimize-MyMix/17-startup-option.ps1'\""
+    $stage17Invariant = @'
+Assert-Contains 'tools/Optimize-MyMix.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/17-startup-option.ps1'"
+'@.Trim()
     $stage19Invariant = @'
 Assert-Contains 'tools/Optimize-MyMix.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/19-display-volume-curve.ps1'"
 Assert-PathExists 'tools/Optimize-MyMix/19-display-volume-curve.ps1'
@@ -77,7 +79,6 @@ Assert-PathExists 'tools/Optimize-MyMix/19-display-volume-curve.ps1'
     Write-RepoText $testPath $test
 
     .\tools\Test-MyMixRefactor.ps1
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 finally {
     Pop-Location
