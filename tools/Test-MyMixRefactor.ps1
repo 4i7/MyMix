@@ -61,6 +61,15 @@ Assert-Contains 'EarTrumpet/Interop/Helpers/HotkeyManager.cs' 'User32.WM_HOTKEY'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Settings.ToggleMuteHotkeyTyped += CollectionViewModel.ToggleDefaultMute;'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Settings.CycleOutputDeviceHotkeyTyped += CollectionViewModel.CycleDefaultDevice;'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Math.Sign(wheelDelta) * Settings.VolumeStep'
+Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceViewModel.cs' 'public void IncrementVolume(int delta) => Volume += delta;'
+Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'get => _stream.Volume.ToVolumeInt();'
+Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'set => _stream.Volume = value / 100f;'
+Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDevice.cs' 'var rawVolume = displayVolume.ToLogVolume();'
+Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSession.cs' 'var rawVolume = displayVolume.ToLogVolume();'
+Assert-Contains 'EarTrumpet/Extensions/FloatExtensions.cs' 'private const double CurveFactor = 3.5;'
+Assert-Contains 'EarTrumpet/Extensions/FloatExtensions.cs' 'Math.Exp(CurveFactor * val) * InverseCurveScale'
+Assert-Contains 'EarTrumpet/Extensions/FloatExtensions.cs' '(Math.Log(val) + CurveFactor) / CurveFactor'
+Assert-Contains 'EarTrumpet/Properties/Resources.resx' '<value>Wheel step (% of displayed range)</value>'
 Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding ToggleMuteHotkey}"'
 Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding CycleOutputDeviceHotkey}"'
 Assert-Contains 'EarTrumpet/AppSettings.cs' 'if (value < 1) return 1;'
@@ -108,9 +117,11 @@ Assert-Contains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' 'Interlo
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceViewModel.cs' 'public override void Dispose()'
 
 # Optimizer metadata and future upstream refresh must preserve the architecture and release identity.
-foreach ($marker in @('version=5','peak_meter=30fps-visible-aggregate-smoothed-single-binding','vm_lifetime=explicit-dispose','icon_cache=bounded-frozen','appinfo_cache=per-process','audio_callbacks=coalesced','process_watcher=event-driven-process-exit-disposable-registrations','control_shortcuts=mute-cycle-output-configurable-step','startup=opt-in-hkcu-run')) { Assert-Contains '.mymix-optimized' $marker }
+foreach ($marker in @('version=5','peak_meter=30fps-visible-aggregate-smoothed-single-binding','vm_lifetime=explicit-dispose','icon_cache=bounded-frozen','appinfo_cache=per-process','audio_callbacks=coalesced','process_watcher=event-driven-process-exit-disposable-registrations','control_shortcuts=mute-cycle-output-configurable-step','volume_control=logarithmic-3.5-display-step','startup=opt-in-hkcu-run')) { Assert-Contains '.mymix-optimized' $marker }
 Assert-Contains 'tools/Optimize-MyMix.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls.ps1'"
 Assert-Contains 'tools/Optimize-MyMix.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/17-startup-option.ps1'"
+Assert-Contains 'tools/Optimize-MyMix.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/19-display-volume-curve.ps1'"
+Assert-PathExists 'tools/Optimize-MyMix/19-display-volume-curve.ps1'
 Assert-Contains 'tools/Optimize-MyMix/15-lightweight-controls.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls-final.ps1'"
 Assert-PathExists 'tools/Optimize-MyMix/16-appinfo-exit-race.ps1'
 Assert-PathExists 'tools/Optimize-MyMix/17-startup-option.ps1'

@@ -646,7 +646,7 @@
     <value>既定の出力のミュートを切り替える</value>
   </data>
   <data name="SettingsVolumeStepText" xml:space="preserve">
-    <value>音量の変更幅 (%)</value>
+    <value>ホイール1段の音量変更幅（表示範囲 %）</value>
   </data>
   <data name="MouseSettingsPageText" xml:space="preserve">
     <value>マウス設定</value>

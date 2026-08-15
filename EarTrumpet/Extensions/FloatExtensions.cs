@@ -4,7 +4,7 @@ namespace EarTrumpet.Extensions
 {
     public static class FloatExtensions
     {
-        private const double CurveFactor = 5.757;
+        private const double CurveFactor = 3.5;
         private static readonly double InverseCurveScale = Math.Exp(-CurveFactor);
         public static readonly float MuteThreshold = (float)(Math.Exp(CurveFactor * 0.01) * InverseCurveScale);
 

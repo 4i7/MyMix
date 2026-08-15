@@ -61,8 +61,9 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/17-startup-option.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/18-settings-ui-fix.ps1')
+. (Resolve-RepoPath 'tools/Optimize-MyMix/19-display-volume-curve.ps1')
 
-Write-Text '.mymix-optimized' "version=5`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`nprocess_watcher=event-driven-process-exit-disposable-registrations`ncontrol_shortcuts=mute-cycle-output-configurable-step`nstartup=opt-in-hkcu-run`n"
+Write-Text '.mymix-optimized' "version=5`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`nprocess_watcher=event-driven-process-exit-disposable-registrations`ncontrol_shortcuts=mute-cycle-output-configurable-step`nvolume_control=logarithmic-3.5-display-step`nstartup=opt-in-hkcu-run`n"
 
 # Final invariants. These are deliberately behavioral, not just file-existence checks.
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'new Timer(1000.0 / 30.0)'
@@ -104,6 +105,15 @@ Assert-Contains 'EarTrumpet/AppSettings.cs' 'public int VolumeStep'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Settings.ToggleMuteHotkeyTyped += CollectionViewModel.ToggleDefaultMute;'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Settings.CycleOutputDeviceHotkeyTyped += CollectionViewModel.CycleDefaultDevice;'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Math.Sign(wheelDelta) * Settings.VolumeStep'
+Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceViewModel.cs' 'public void IncrementVolume(int delta) => Volume += delta;'
+Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'get => _stream.Volume.ToVolumeInt();'
+Assert-Contains 'EarTrumpet/UI/ViewModels/AudioSessionViewModel.cs' 'set => _stream.Volume = value / 100f;'
+Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDevice.cs' 'var rawVolume = displayVolume.ToLogVolume();'
+Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSession.cs' 'var rawVolume = displayVolume.ToLogVolume();'
+Assert-Contains 'EarTrumpet/Extensions/FloatExtensions.cs' 'private const double CurveFactor = 3.5;'
+Assert-Contains 'EarTrumpet/Extensions/FloatExtensions.cs' 'Math.Exp(CurveFactor * val) * InverseCurveScale'
+Assert-Contains 'EarTrumpet/Extensions/FloatExtensions.cs' '(Math.Log(val) + CurveFactor) / CurveFactor'
+Assert-Contains 'EarTrumpet/Properties/Resources.resx' '<value>Wheel step (% of displayed range)</value>'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'private static bool IsStartupRegistrationEnabled()'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Command = new RelayCommand(ToggleStartupRegistration)'
 Assert-Contains 'EarTrumpet/App.xaml.cs' '@"Software\Microsoft\Windows\CurrentVersion\Run"'
@@ -159,5 +169,6 @@ Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'PollInterval
 Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Thread.Sleep('
 Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForSingleObject('
 Assert-Contains '.mymix-optimized' 'startup=opt-in-hkcu-run'
+Assert-Contains '.mymix-optimized' 'volume_control=logarithmic-3.5-display-step'
 
 Write-Host 'MyMix deep optimization, public hardening, runtime stability, lightweight controls, and opt-in startup pass succeeded.'
