@@ -63,7 +63,18 @@ Assert-Contains 'EarTrumpet/App.xaml.cs' 'Settings.CycleOutputDeviceHotkeyTyped 
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Math.Sign(wheelDelta) * Settings.VolumeStep'
 Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding ToggleMuteHotkey}"'
 Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding CycleOutputDeviceHotkey}"'
-Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'ItemsSource="{Binding VolumeStepOptions}"'
+Assert-Contains 'EarTrumpet/AppSettings.cs' 'if (value < 1) return 1;'
+Assert-Contains 'EarTrumpet/AppSettings.cs' 'if (value > 10) return 10;'
+Assert-Contains 'EarTrumpet/UI/ViewModels/EarTrumpetMouseSettingsPageViewModel.cs' 'public double VolumeStep'
+Assert-Contains 'EarTrumpet/UI/ViewModels/EarTrumpetMouseSettingsPageViewModel.cs' 'VolumeStepDisplayText'
+Assert-NotContains 'EarTrumpet/UI/ViewModels/EarTrumpetMouseSettingsPageViewModel.cs' 'VolumeStepOptions'
+Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' '<Slider Width="280"'
+Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Minimum="1"'
+Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Maximum="10"'
+Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'TickFrequency="1"'
+Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'IsSnapToTickEnabled="True"'
+Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Value="{Binding VolumeStep, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"'
+Assert-NotContains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'ItemsSource="{Binding VolumeStepOptions}"'
 
 # Windows sign-in startup is explicitly opt-in. Launching MyMix must never register it by itself.
 Assert-Contains 'EarTrumpet/App.xaml.cs' "private static bool IsStartupRegistrationEnabled()"

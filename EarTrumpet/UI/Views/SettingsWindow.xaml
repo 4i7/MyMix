@@ -186,9 +186,35 @@
                 <CheckBox HorizontalAlignment="Left"
                           Content="{x:Static resx:Resources.SettingsUseGlobalMouseWheelHook}"
                           IsChecked="{Binding UseGlobalMouseWheelHook, Mode=TwoWay}" />
-                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
-                    <TextBlock VerticalAlignment="Center" Style="{StaticResource BodyText}" Text="{Binding VolumeStepText}" />
-                    <ComboBox Width="80" Margin="12,0,0,0" ItemsSource="{Binding VolumeStepOptions}" SelectedItem="{Binding VolumeStep, Mode=TwoWay}" IsEditable="False" />
+                <StackPanel Margin="0,12,0,0" HorizontalAlignment="Left">
+                    <Grid Width="280">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" Style="{StaticResource BodyText}" Text="{Binding VolumeStepText}" />
+                        <TextBlock Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Style="{StaticResource BodyText}" Text="{Binding VolumeStepDisplayText}" />
+                    </Grid>
+                    <Slider Width="280"
+                            Margin="0,8,0,0"
+                            Minimum="1"
+                            Maximum="10"
+                            SmallChange="1"
+                            LargeChange="1"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="True"
+                            IsMoveToPointEnabled="True"
+                            AutoToolTipPlacement="TopLeft"
+                            AutoToolTipPrecision="0"
+                            Value="{Binding VolumeStep, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Grid Width="280" Margin="0,2,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource BodySubText}" Text="1%" />
+                        <TextBlock Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource BodySubText}" Text="10%" />
+                    </Grid>
                 </StackPanel>
             </StackPanel>
         </DataTemplate>
