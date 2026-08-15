@@ -59,6 +59,16 @@ Assert-Contains 'EarTrumpet/Properties/Resources.resx' '<value>Wheel step (% of 
     $optimizer = Insert-AfterOnce $optimizer $optimizerMarker $optimizerMarkerAdd 'optimizer metadata invariant'
     Write-RepoText $optimizerPath $optimizer
 
+    $metadataPath = '.mymix-optimized'
+    $metadata = Read-RepoText $metadataPath
+    if (-not $metadata.Contains('volume_control=logarithmic-3.5-display-step')) {
+        $metadataAnchor = "control_shortcuts=mute-cycle-output-configurable-step`nstartup=opt-in-hkcu-run"
+        $metadataReplacement = "control_shortcuts=mute-cycle-output-configurable-step`nvolume_control=logarithmic-3.5-display-step`nstartup=opt-in-hkcu-run"
+        if (-not $metadata.Contains($metadataAnchor)) { throw 'Materialized optimizer metadata anchor missing.' }
+        $metadata = $metadata.Replace($metadataAnchor, $metadataReplacement)
+        Write-RepoText $metadataPath $metadata
+    }
+
     $testPath = 'tools/Test-MyMixRefactor.ps1'
     $test = Read-RepoText $testPath
     $test = Insert-AfterOnce $test $wheelInvariant $volumeInvariants 'test display-volume invariants'
