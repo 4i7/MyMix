@@ -11,3 +11,4 @@ audio_callbacks=coalesced
 public_hardening=unbranded-icons-safe-finalizer-smoke-test
 process_watcher=event-driven-process-exit-disposable-registrations
 control_shortcuts=mute-cycle-output-configurable-step
+startup=opt-in-hkcu-run

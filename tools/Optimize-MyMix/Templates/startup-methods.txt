@@ -1,0 +1,55 @@
+        private static bool IsStartupRegistrationEnabled()
+        {
+            const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+            const string valueName = "MyMix";
+
+            try
+            {
+                using (var runKey = Registry.CurrentUser.OpenSubKey(runKeyPath, writable: false))
+                {
+                    return runKey?.GetValue(valueName) != null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"App IsStartupRegistrationEnabled failed: {ex}");
+                return false;
+            }
+        }
+
+        private static void ToggleStartupRegistration()
+        {
+            SetStartupRegistration(!IsStartupRegistrationEnabled());
+        }
+
+        private static void SetStartupRegistration(bool enabled)
+        {
+            const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+            const string valueName = "MyMix";
+
+            try
+            {
+                using (var runKey = Registry.CurrentUser.OpenSubKey(runKeyPath, writable: true) ?? Registry.CurrentUser.CreateSubKey(runKeyPath))
+                {
+                    if (runKey == null)
+                    {
+                        return;
+                    }
+
+                    if (enabled)
+                    {
+                        var executablePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                        runKey.SetValue(valueName, $"\"{executablePath}\"");
+                    }
+                    else
+                    {
+                        runKey.DeleteValue(valueName, throwOnMissingValue: false);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"App SetStartupRegistration failed: {ex}");
+            }
+        }
+

@@ -52,7 +52,7 @@ permissions:
 
 concurrency:
   group: mymix-source-maintenance-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   update-build-propose:
@@ -84,6 +84,19 @@ jobs:
           }
           else {
             .\tools\Update-FromEarTrumpet.ps1 -UpstreamRef $env:UPSTREAM_REF
+          }
+
+      - name: Verify regeneration matches committed MyMix source
+        id: drift
+        if: steps.sync.outputs.changed == 'true' && steps.sync.outputs.upstream_changed != 'true'
+        shell: powershell
+        run: |
+          git add -A
+          git diff --cached --ignore-space-at-eol --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git diff --cached --ignore-space-at-eol --stat
+            git diff --cached --ignore-space-at-eol --no-ext-diff --unified=3
+            throw 'Regenerated MyMix differs from committed source. Materialize the transform output in the same pull request before merging.'
           }
 
       - name: Prepare portable .NET Framework 4.6.2 reference assemblies
@@ -137,21 +150,6 @@ jobs:
         run: |
           foreach ($path in @('.\Build', '.\packages', '.\refasm', '.\EarTrumpet\obj')) {
             Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
-          }
-
-      - name: Commit transform-maintenance regeneration
-        if: github.event_name == 'push' && steps.sync.outputs.changed == 'true' && steps.sync.outputs.upstream_changed != 'true'
-        shell: powershell
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet
-          if ($LASTEXITCODE -ne 0) {
-            git commit -m "Regenerate public-hardened MyMix after transform maintenance"
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            git push origin HEAD:main
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
       - name: Commit validated update branch
@@ -213,6 +211,7 @@ jobs:
         shell: powershell
         env:
           SYNC_OUTCOME: ${{ steps.sync.outcome }}
+          DRIFT_OUTCOME: ${{ steps.drift.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           WATCHER_OUTCOME: ${{ steps.watcher.outcome }}
           SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
@@ -225,6 +224,7 @@ jobs:
         run: |
           $lines = @('## MyMix upstream update', '', 'Actions artifact/cache upload: disabled (0 bytes)')
           if ($env:SYNC_OUTCOME -ne 'success') { $lines += 'Import/conversion/hardening failed. Nothing was published.' }
+          elseif ($env:DRIFT_OUTCOME -eq 'failure') { $lines += 'Regenerated source differs from committed MyMix source. Nothing was published.' }
           elseif ($env:CHANGED -ne 'true') { $lines += 'No new EarTrumpet commit was found for the requested ref.' }
           elseif ($env:BUILD_OUTCOME -ne 'success') { $lines += 'Release x86 build failed. Nothing was published.' }
           elseif ($env:WATCHER_OUTCOME -ne 'success') { $lines += 'Process-watcher lifetime/race stress validation failed. Nothing was published.' }
