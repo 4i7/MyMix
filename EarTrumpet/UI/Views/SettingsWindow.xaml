@@ -188,7 +188,7 @@
                           IsChecked="{Binding UseGlobalMouseWheelHook, Mode=TwoWay}" />
                 <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
                     <TextBlock VerticalAlignment="Center" Style="{StaticResource BodyText}" Text="{Binding VolumeStepText}" />
-                    <ComboBox Width="80" Margin="12,0,0,0" ItemsSource="{Binding VolumeStepOptions}" SelectedItem="{Binding VolumeStep, Mode=TwoWay}" />
+                    <ComboBox Width="80" Margin="12,0,0,0" ItemsSource="{Binding VolumeStepOptions}" SelectedItem="{Binding VolumeStep, Mode=TwoWay}" IsEditable="False" />
                 </StackPanel>
             </StackPanel>
         </DataTemplate>
