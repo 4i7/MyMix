@@ -62,41 +62,13 @@ namespace EarTrumpet
 
             HotkeyManager.Current.KeyPressed += hotkey =>
             {
-                if (hotkey.Equals(_flyoutHotkey))
-                {
-                    Trace.WriteLine("AppSettings FlyoutHotkeyTyped");
-                    FlyoutHotkeyTyped?.Invoke();
-                }
-                else if (hotkey.Equals(_settingsHotkey))
-                {
-                    Trace.WriteLine("AppSettings SettingsHotkeyTyped");
-                    SettingsHotkeyTyped?.Invoke();
-                }
-                else if (hotkey.Equals(_mixerHotkey))
-                {
-                    Trace.WriteLine("AppSettings MixerHotkeyTyped");
-                    MixerHotkeyTyped?.Invoke();
-                }
-                else if (hotkey.Equals(_absoluteVolumeUpHotkey))
-                {
-                    Trace.WriteLine("AppSettings AbsoluteVolumeUpHotkeyTyped");
-                    AbsoluteVolumeUpHotkeyTyped?.Invoke();
-                }
-                else if (hotkey.Equals(_absoluteVolumeDownHotkey))
-                {
-                    Trace.WriteLine("AppSettings AbsoluteVolumeDownHotkeyTyped");
-                    AbsoluteVolumeDownHotkeyTyped?.Invoke();
-                }
-                else if (hotkey.Equals(_toggleMuteHotkey))
-                {
-                    Trace.WriteLine("AppSettings ToggleMuteHotkeyTyped");
-                    ToggleMuteHotkeyTyped?.Invoke();
-                }
-                else if (hotkey.Equals(_cycleOutputDeviceHotkey))
-                {
-                    Trace.WriteLine("AppSettings CycleOutputDeviceHotkeyTyped");
-                    CycleOutputDeviceHotkeyTyped?.Invoke();
-                }
+                if (hotkey.Equals(_flyoutHotkey)) FlyoutHotkeyTyped?.Invoke();
+                else if (hotkey.Equals(_settingsHotkey)) SettingsHotkeyTyped?.Invoke();
+                else if (hotkey.Equals(_mixerHotkey)) MixerHotkeyTyped?.Invoke();
+                else if (hotkey.Equals(_absoluteVolumeUpHotkey)) AbsoluteVolumeUpHotkeyTyped?.Invoke();
+                else if (hotkey.Equals(_absoluteVolumeDownHotkey)) AbsoluteVolumeDownHotkeyTyped?.Invoke();
+                else if (hotkey.Equals(_toggleMuteHotkey)) ToggleMuteHotkeyTyped?.Invoke();
+                else if (hotkey.Equals(_cycleOutputDeviceHotkey)) CycleOutputDeviceHotkeyTyped?.Invoke();
             };
         }
 
@@ -122,79 +94,30 @@ namespace EarTrumpet
             }
         }
 
-        public HotkeyData FlyoutHotkey
-        {
-            get => _flyoutHotkey;
-            set => SetHotkey("Hotkey", ref _flyoutHotkey, value);
-        }
-
-        public HotkeyData MixerHotkey
-        {
-            get => _mixerHotkey;
-            set => SetHotkey("MixerHotkey", ref _mixerHotkey, value);
-        }
-
-        public HotkeyData SettingsHotkey
-        {
-            get => _settingsHotkey;
-            set => SetHotkey("SettingsHotkey", ref _settingsHotkey, value);
-        }
-
-        public HotkeyData AbsoluteVolumeUpHotkey
-        {
-            get => _absoluteVolumeUpHotkey;
-            set => SetHotkey("AbsoluteVolumeUpHotkey", ref _absoluteVolumeUpHotkey, value);
-        }
-
-        public HotkeyData AbsoluteVolumeDownHotkey
-        {
-            get => _absoluteVolumeDownHotkey;
-            set => SetHotkey("AbsoluteVolumeDownHotkey", ref _absoluteVolumeDownHotkey, value);
-        }
-
-        public HotkeyData ToggleMuteHotkey
-        {
-            get => _toggleMuteHotkey;
-            set => SetHotkey("ToggleMuteHotkey", ref _toggleMuteHotkey, value);
-        }
-
-        public HotkeyData CycleOutputDeviceHotkey
-        {
-            get => _cycleOutputDeviceHotkey;
-            set => SetHotkey("CycleOutputDeviceHotkey", ref _cycleOutputDeviceHotkey, value);
-        }
+        public HotkeyData FlyoutHotkey { get => _flyoutHotkey; set => SetHotkey("Hotkey", ref _flyoutHotkey, value); }
+        public HotkeyData MixerHotkey { get => _mixerHotkey; set => SetHotkey("MixerHotkey", ref _mixerHotkey, value); }
+        public HotkeyData SettingsHotkey { get => _settingsHotkey; set => SetHotkey("SettingsHotkey", ref _settingsHotkey, value); }
+        public HotkeyData AbsoluteVolumeUpHotkey { get => _absoluteVolumeUpHotkey; set => SetHotkey("AbsoluteVolumeUpHotkey", ref _absoluteVolumeUpHotkey, value); }
+        public HotkeyData AbsoluteVolumeDownHotkey { get => _absoluteVolumeDownHotkey; set => SetHotkey("AbsoluteVolumeDownHotkey", ref _absoluteVolumeDownHotkey, value); }
+        public HotkeyData ToggleMuteHotkey { get => _toggleMuteHotkey; set => SetHotkey("ToggleMuteHotkey", ref _toggleMuteHotkey, value); }
+        public HotkeyData CycleOutputDeviceHotkey { get => _cycleOutputDeviceHotkey; set => SetHotkey("CycleOutputDeviceHotkey", ref _cycleOutputDeviceHotkey, value); }
 
         public bool IsExpanded
         {
             get => _isExpanded;
-            set
-            {
-                if (_isExpanded == value) return;
-                _isExpanded = value;
-                _settings.Set("IsExpanded", value);
-            }
+            set { if (_isExpanded == value) return; _isExpanded = value; _settings.Set("IsExpanded", value); }
         }
 
         public bool UseScrollWheelInTray
         {
             get => _useScrollWheelInTray;
-            set
-            {
-                if (_useScrollWheelInTray == value) return;
-                _useScrollWheelInTray = value;
-                _settings.Set("UseScrollWheelInTray", value);
-            }
+            set { if (_useScrollWheelInTray == value) return; _useScrollWheelInTray = value; _settings.Set("UseScrollWheelInTray", value); }
         }
 
         public bool UseGlobalMouseWheelHook
         {
             get => _useGlobalMouseWheelHook;
-            set
-            {
-                if (_useGlobalMouseWheelHook == value) return;
-                _useGlobalMouseWheelHook = value;
-                _settings.Set("UseGlobalMouseWheelHook", value);
-            }
+            set { if (_useGlobalMouseWheelHook == value) return; _useGlobalMouseWheelHook = value; _settings.Set("UseGlobalMouseWheelHook", value); }
         }
 
         public int VolumeStep
@@ -212,21 +135,13 @@ namespace EarTrumpet
         public WINDOWPLACEMENT? FullMixerWindowPlacement
         {
             get => _fullMixerWindowPlacement;
-            set
-            {
-                _fullMixerWindowPlacement = value;
-                _settings.Set("FullMixerWindowPlacement", value);
-            }
+            set { _fullMixerWindowPlacement = value; _settings.Set("FullMixerWindowPlacement", value); }
         }
 
         public WINDOWPLACEMENT? SettingsWindowPlacement
         {
             get => _settingsWindowPlacement;
-            set
-            {
-                _settingsWindowPlacement = value;
-                _settings.Set("SettingsWindowPlacement", value);
-            }
+            set { _settingsWindowPlacement = value; _settings.Set("SettingsWindowPlacement", value); }
         }
     }
 }

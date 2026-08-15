@@ -7,20 +7,13 @@ using System.Threading;
 
 namespace EarTrumpet.DataModel
 {
-    // Tracks process lifetime with the CLR's registered process-exit wait. There is no dedicated
-    // watcher thread and no periodic polling wake-up. Callback registrations remain explicitly disposable.
     public class ProcessWatcherService
     {
         private sealed class CallbackRegistration
         {
             public readonly long Id;
             public readonly Action<int> Callback;
-
-            public CallbackRegistration(long id, Action<int> callback)
-            {
-                Id = id;
-                Callback = callback;
-            }
+            public CallbackRegistration(long id, Action<int> callback) { Id = id; Callback = callback; }
         }
 
         private sealed class ProcessWatcherData
@@ -36,18 +29,8 @@ namespace EarTrumpet.DataModel
             private readonly int _processId;
             private readonly long _registrationId;
             private int _disposed;
-
-            public Registration(int processId, long registrationId)
-            {
-                _processId = processId;
-                _registrationId = registrationId;
-            }
-
-            public void Dispose()
-            {
-                if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-                UnwatchProcess(_processId, _registrationId);
-            }
+            public Registration(int processId, long registrationId) { _processId = processId; _registrationId = registrationId; }
+            public void Dispose() { if (Interlocked.Exchange(ref _disposed, 1) == 0) UnwatchProcess(_processId, _registrationId); }
         }
 
         private sealed class EmptyRegistration : IDisposable
@@ -64,32 +47,22 @@ namespace EarTrumpet.DataModel
         public static IDisposable WatchProcess(int processId, Action<int> processQuit)
         {
             if (processQuit == null) throw new ArgumentNullException(nameof(processQuit));
-
             var registrationId = Interlocked.Increment(ref s_nextRegistrationId);
-            var callbackRegistration = new CallbackRegistration(registrationId, processQuit);
+            var callback = new CallbackRegistration(registrationId, processQuit);
 
             lock (s_lock)
             {
                 if (s_watchers.TryGetValue(processId, out var existing))
                 {
-                    existing.QuitActions.Add(callbackRegistration);
+                    existing.QuitActions.Add(callback);
                     return new Registration(processId, registrationId);
                 }
             }
 
             Process process;
-            try
-            {
-                process = Process.GetProcessById(processId);
-            }
-            catch (ArgumentException)
-            {
-                return EmptyRegistration.Instance;
-            }
-            catch (InvalidOperationException)
-            {
-                return EmptyRegistration.Instance;
-            }
+            try { process = Process.GetProcessById(processId); }
+            catch (ArgumentException) { return EmptyRegistration.Instance; }
+            catch (InvalidOperationException) { return EmptyRegistration.Instance; }
             catch (Win32Exception ex)
             {
                 Trace.WriteLine($"ProcessWatcherService open failed for {processId}: {ex.Message}");
@@ -97,8 +70,8 @@ namespace EarTrumpet.DataModel
             }
 
             var data = new ProcessWatcherData { ProcessId = processId, Process = process };
-            data.QuitActions.Add(callbackRegistration);
-            data.ExitedHandler = (_, __) => CompleteWatcher(data, invokeCallbacks: true);
+            data.QuitActions.Add(callback);
+            data.ExitedHandler = (_, __) => CompleteWatcher(data, true);
             process.Exited += data.ExitedHandler;
 
             var raced = false;
@@ -106,7 +79,7 @@ namespace EarTrumpet.DataModel
             {
                 if (s_watchers.TryGetValue(processId, out var existing))
                 {
-                    existing.QuitActions.Add(callbackRegistration);
+                    existing.QuitActions.Add(callback);
                     raced = true;
                 }
                 else
@@ -121,22 +94,17 @@ namespace EarTrumpet.DataModel
                 return new Registration(processId, registrationId);
             }
 
-            try
-            {
-                // EnableRaisingEvents registers a wait on the process handle with the CLR. The
-                // callback runs only on exit, so idle operation has no polling cadence.
-                process.EnableRaisingEvents = true;
-            }
+            try { process.EnableRaisingEvents = true; }
             catch (InvalidOperationException ex)
             {
                 Trace.WriteLine($"ProcessWatcherService enable failed for {processId}: {ex.Message}");
-                CompleteWatcher(data, invokeCallbacks: false);
+                CompleteWatcher(data, false);
                 return EmptyRegistration.Instance;
             }
             catch (Win32Exception ex)
             {
                 Trace.WriteLine($"ProcessWatcherService enable failed for {processId}: {ex.Message}");
-                CompleteWatcher(data, invokeCallbacks: false);
+                CompleteWatcher(data, false);
                 return EmptyRegistration.Instance;
             }
 
@@ -146,59 +114,38 @@ namespace EarTrumpet.DataModel
         private static void UnwatchProcess(int processId, long registrationId)
         {
             ProcessWatcherData toDispose = null;
-
             lock (s_lock)
             {
                 if (!s_watchers.TryGetValue(processId, out var data)) return;
-
                 for (var i = data.QuitActions.Count - 1; i >= 0; i--)
                 {
-                    if (data.QuitActions[i].Id == registrationId)
-                    {
-                        data.QuitActions.RemoveAt(i);
-                        break;
-                    }
+                    if (data.QuitActions[i].Id == registrationId) { data.QuitActions.RemoveAt(i); break; }
                 }
-
                 if (data.QuitActions.Count == 0)
                 {
                     s_watchers.Remove(processId);
                     toDispose = data;
                 }
             }
-
             if (toDispose != null) DisposeProcess(toDispose);
         }
 
         private static void CompleteWatcher(ProcessWatcherData data, bool invokeCallbacks)
         {
             CallbackRegistration[] callbacks = null;
-
             lock (s_lock)
             {
-                if (!s_watchers.TryGetValue(data.ProcessId, out var current) || !ReferenceEquals(current, data))
-                {
-                    return;
-                }
-
+                if (!s_watchers.TryGetValue(data.ProcessId, out var current) || !ReferenceEquals(current, data)) return;
                 s_watchers.Remove(data.ProcessId);
                 if (invokeCallbacks) callbacks = data.QuitActions.ToArray();
                 data.QuitActions.Clear();
             }
-
             DisposeProcess(data);
-
             if (callbacks == null) return;
             for (var i = 0; i < callbacks.Length; i++)
             {
-                try
-                {
-                    callbacks[i].Callback(data.ProcessId);
-                }
-                catch (Exception ex)
-                {
-                    Trace.WriteLine($"ProcessWatcherService callback failed: {ex}");
-                }
+                try { callbacks[i].Callback(data.ProcessId); }
+                catch (Exception ex) { Trace.WriteLine($"ProcessWatcherService callback failed: {ex}"); }
             }
         }
 
@@ -208,19 +155,10 @@ namespace EarTrumpet.DataModel
             data.Process = null;
             var handler = data.ExitedHandler;
             data.ExitedHandler = null;
-
             if (process == null) return;
-            try
-            {
-                if (handler != null) process.Exited -= handler;
-            }
-            catch (InvalidOperationException)
-            {
-            }
-            finally
-            {
-                process.Dispose();
-            }
+            try { if (handler != null) process.Exited -= handler; }
+            catch (InvalidOperationException) { }
+            finally { process.Dispose(); }
         }
     }
 }

@@ -107,7 +107,24 @@
                                     Content="{Binding OpenSettingsHotkey}"
                                     IsTabStop="False" />
                 </Grid>
-                <TextBlock Style="{StaticResource BodyText}" Text="{x:Static resx:Resources.SettingsAbsoluteVolumeUpText}" />
+                <TextBlock Style="{StaticResource BodyText}" Text="{Binding ToggleMuteText}" />
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center" Style="{StaticResource BodySubText}" Text="{x:Static resx:Resources.DefaultHotkeyDescriptionText}" />
+                    <TextBlock Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource BodyText}" Text="{Binding DefaultToggleMuteHotkey}" />
+                    <TextBlock Grid.Row="1" VerticalAlignment="Center" Style="{StaticResource BodySubText}" Text="{x:Static resx:Resources.HotkeyDescriptionText}" />
+                    <ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding ToggleMuteHotkey}" IsTabStop="False" />
+                </Grid>
+                <TextBlock Style="{StaticResource BodyText}" Text="{Binding CycleOutputDeviceText}" />
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center" Style="{StaticResource BodySubText}" Text="{x:Static resx:Resources.DefaultHotkeyDescriptionText}" />
+                    <TextBlock Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource BodyText}" Text="{Binding DefaultCycleOutputDeviceHotkey}" />
+                    <TextBlock Grid.Row="1" VerticalAlignment="Center" Style="{StaticResource BodySubText}" Text="{x:Static resx:Resources.HotkeyDescriptionText}" />
+                    <ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding CycleOutputDeviceHotkey}" IsTabStop="False" />
+                </Grid>                <TextBlock Style="{StaticResource BodyText}" Text="{x:Static resx:Resources.SettingsAbsoluteVolumeUpText}" />
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -123,7 +140,7 @@
                     <TextBlock Grid.Column="1"
                                VerticalAlignment="Center"
                                Style="{StaticResource BodyText}"
-                               Text="{Binding DefaultSettingsHotKey}" />
+                               Text="{Binding DefaultAbsoluteVolumeUpHotkey}" />
                     <TextBlock Grid.Row="1"
                                VerticalAlignment="Center"
                                Style="{StaticResource BodySubText}"
@@ -149,7 +166,7 @@
                     <TextBlock Grid.Column="1"
                                VerticalAlignment="Center"
                                Style="{StaticResource BodyText}"
-                               Text="{Binding DefaultSettingsHotKey}" />
+                               Text="{Binding DefaultAbsoluteVolumeDownHotkey}" />
                     <TextBlock Grid.Row="1"
                                VerticalAlignment="Center"
                                Style="{StaticResource BodySubText}"
@@ -169,6 +186,10 @@
                 <CheckBox HorizontalAlignment="Left"
                           Content="{x:Static resx:Resources.SettingsUseGlobalMouseWheelHook}"
                           IsChecked="{Binding UseGlobalMouseWheelHook, Mode=TwoWay}" />
+                <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center" Style="{StaticResource BodyText}" Text="{Binding VolumeStepText}" />
+                    <ComboBox Width="80" Margin="12,0,0,0" ItemsSource="{Binding VolumeStepOptions}" SelectedItem="{Binding VolumeStep, Mode=TwoWay}" />
+                </StackPanel>
             </StackPanel>
         </DataTemplate>
                 <DataTemplate DataType="{x:Type vm:EarTrumpetAboutPageViewModel}">

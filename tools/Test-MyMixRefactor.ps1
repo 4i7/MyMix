@@ -92,7 +92,7 @@ Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceViewModel.cs' 'public override v
 foreach ($marker in @('version=5','peak_meter=30fps-visible-aggregate-smoothed-single-binding','vm_lifetime=explicit-dispose','icon_cache=bounded-frozen','appinfo_cache=per-process','audio_callbacks=coalesced','process_watcher=event-driven-process-exit-disposable-registrations','control_shortcuts=mute-cycle-output-configurable-step')) { Assert-Contains '.mymix-optimized' $marker }
 Assert-Contains 'tools/Optimize-MyMix.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls.ps1'"
 Assert-Contains 'tools/Optimize-MyMix/15-lightweight-controls.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls-final.ps1'"
-Assert-PathExists 'tools/Optimize-MyMix/15-process-watcher-race-safe-appinfo.ps1'
+Assert-PathExists 'tools/Optimize-MyMix/16-appinfo-exit-race.ps1'
 Assert-Contains 'tools/Test-ProcessWatcherLifetime.ps1' 'Event-driven ProcessWatcherService registration/lifetime/race/stress validation passed.'
 
 # Distribution workflows remain explicit, reproducible and validate the event-driven lifetime path.

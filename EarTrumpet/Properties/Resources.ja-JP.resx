@@ -642,4 +642,11 @@
   <data name="SettingsAbsoluteVolumeUpText" xml:space="preserve">
     <value>すべてのデバイスの音量を上げる</value>
   </data>
+  <data name="SettingsToggleMuteHotkeyText" xml:space="preserve">
+    <value>譌｢螳壹・蜃ｺ蜉帙ｒ繝溘Η繝ｼ繝亥・繧頑崛縺・
+Ensure-ResxStringFinal </value>
+  </data>
+  <data name="SettingsVolumeStepText" xml:space="preserve">
+    <value>髻ｳ驥上・螟画峩蟷・(%)</value>
+  </data>
 </root>
