@@ -47,11 +47,6 @@ namespace EarTrumpet
         {
             _isSmokeTest = e.Args.Any(arg => string.Equals(arg, "--smoke-test", StringComparison.OrdinalIgnoreCase));
 
-            if (!_isSmokeTest)
-            {
-                EnsureStartupRegistration();
-            }
-
             Exit += (_, __) => IsShuttingDown = true;
             HasIdentity = false;
             HasDevIdentity = false;
@@ -81,27 +76,58 @@ namespace EarTrumpet
             }
         }
 
-        private static void EnsureStartupRegistration()
+        private static bool IsStartupRegistrationEnabled()
         {
             const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
             const string valueName = "MyMix";
 
             try
             {
-                var executablePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-                var command = $"\"{executablePath}\"";
+                using (var runKey = Registry.CurrentUser.OpenSubKey(runKeyPath, writable: false))
+                {
+                    return runKey?.GetValue(valueName) != null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"App IsStartupRegistrationEnabled failed: {ex}");
+                return false;
+            }
+        }
 
+        private static void ToggleStartupRegistration()
+        {
+            SetStartupRegistration(!IsStartupRegistrationEnabled());
+        }
+
+        private static void SetStartupRegistration(bool enabled)
+        {
+            const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+            const string valueName = "MyMix";
+
+            try
+            {
                 using (var runKey = Registry.CurrentUser.OpenSubKey(runKeyPath, writable: true) ?? Registry.CurrentUser.CreateSubKey(runKeyPath))
                 {
-                    if (runKey != null && !string.Equals(runKey.GetValue(valueName) as string, command, StringComparison.OrdinalIgnoreCase))
+                    if (runKey == null)
                     {
-                        runKey.SetValue(valueName, command);
+                        return;
+                    }
+
+                    if (enabled)
+                    {
+                        var executablePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                        runKey.SetValue(valueName, $"\"{executablePath}\"");
+                    }
+                    else
+                    {
+                        runKey.DeleteValue(valueName, throwOnMissingValue: false);
                     }
                 }
             }
             catch (Exception ex)
             {
-                Trace.WriteLine($"App EnsureStartupRegistration failed: {ex}");
+                Trace.WriteLine($"App SetStartupRegistration failed: {ex}");
             }
         }
 
@@ -234,6 +260,7 @@ namespace EarTrumpet
                 {
                     new ContextMenuItem { DisplayName = EarTrumpet.Properties.Resources.FullWindowTitleText, Command = new RelayCommand(_mixerWindow.OpenOrBringToFront) },
                     new ContextMenuItem { DisplayName = EarTrumpet.Properties.Resources.SettingsWindowText, Command = new RelayCommand(_settingsWindow.OpenOrBringToFront) },
+                    new ContextMenuItem { DisplayName = "Windows サインイン時に MyMix を起動", IsChecked = IsStartupRegistrationEnabled(), Command = new RelayCommand(ToggleStartupRegistration) },
                     new ContextMenuItem { DisplayName = EarTrumpet.Properties.Resources.ContextMenuExitTitle, Command = new RelayCommand(Shutdown) },
                 });
             return ret;
