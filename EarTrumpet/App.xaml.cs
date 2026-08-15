@@ -6,6 +6,7 @@ using EarTrumpet.Interop.Helpers;
 using EarTrumpet.UI.Helpers;
 using EarTrumpet.UI.ViewModels;
 using EarTrumpet.UI.Views;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -72,6 +73,61 @@ namespace EarTrumpet
             else
             {
                 Shutdown();
+            }
+        }
+
+        private static bool IsStartupRegistrationEnabled()
+        {
+            const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+            const string valueName = "MyMix";
+
+            try
+            {
+                using (var runKey = Registry.CurrentUser.OpenSubKey(runKeyPath, writable: false))
+                {
+                    return runKey?.GetValue(valueName) != null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"App IsStartupRegistrationEnabled failed: {ex}");
+                return false;
+            }
+        }
+
+        private static void ToggleStartupRegistration()
+        {
+            SetStartupRegistration(!IsStartupRegistrationEnabled());
+        }
+
+        private static void SetStartupRegistration(bool enabled)
+        {
+            const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+            const string valueName = "MyMix";
+
+            try
+            {
+                using (var runKey = Registry.CurrentUser.OpenSubKey(runKeyPath, writable: true) ?? Registry.CurrentUser.CreateSubKey(runKeyPath))
+                {
+                    if (runKey == null)
+                    {
+                        return;
+                    }
+
+                    if (enabled)
+                    {
+                        var executablePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                        runKey.SetValue(valueName, $"\"{executablePath}\"");
+                    }
+                    else
+                    {
+                        runKey.DeleteValue(valueName, throwOnMissingValue: false);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"App SetStartupRegistration failed: {ex}");
             }
         }
 
@@ -206,6 +262,14 @@ namespace EarTrumpet
                 {
                     new ContextMenuItem { DisplayName = EarTrumpet.Properties.Resources.FullWindowTitleText, Command = new RelayCommand(_mixerWindow.OpenOrBringToFront) },
                     new ContextMenuItem { DisplayName = EarTrumpet.Properties.Resources.SettingsWindowText, Command = new RelayCommand(_settingsWindow.OpenOrBringToFront) },
+                    new ContextMenuItem
+                    {
+                        DisplayName = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ja"
+                            ? "Windows サインイン時に MyMix を起動"
+                            : "Start MyMix at Windows sign-in",
+                        IsChecked = IsStartupRegistrationEnabled(),
+                        Command = new RelayCommand(ToggleStartupRegistration),
+                    },
                     new ContextMenuItem { DisplayName = EarTrumpet.Properties.Resources.ContextMenuExitTitle, Command = new RelayCommand(Shutdown) },
                 });
             return ret;
