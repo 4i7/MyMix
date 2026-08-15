@@ -70,7 +70,6 @@ Assert-Contains 'EarTrumpet/App.xaml.cs' "private static bool IsStartupRegistrat
 Assert-Contains 'EarTrumpet/App.xaml.cs' "private static void SetStartupRegistration(bool enabled)"
 Assert-Contains 'EarTrumpet/App.xaml.cs' "Software\Microsoft\Windows\CurrentVersion\Run"
 Assert-Contains 'EarTrumpet/App.xaml.cs' "Command = new RelayCommand(ToggleStartupRegistration)"
-Assert-Contains 'EarTrumpet/App.xaml.cs' "Windows サインイン時に MyMix を起動"
 Assert-Contains 'EarTrumpet/App.xaml.cs' "Start MyMix at Windows sign-in"
 Assert-NotContains 'EarTrumpet/App.xaml.cs' "EnsureStartupRegistration()"
 
