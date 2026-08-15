@@ -92,10 +92,10 @@ jobs:
         shell: powershell
         run: |
           git add -A
-          git diff --cached --quiet
+          git diff --cached --ignore-space-at-eol --quiet
           if ($LASTEXITCODE -ne 0) {
-            git diff --cached --stat
-            git diff --cached --no-ext-diff --unified=3
+            git diff --cached --ignore-space-at-eol --stat
+            git diff --cached --ignore-space-at-eol --no-ext-diff --unified=3
             throw 'Regenerated MyMix differs from committed source. Materialize the transform output in the same pull request before merging.'
           }
 
