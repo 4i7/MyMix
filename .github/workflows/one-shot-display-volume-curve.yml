@@ -1,0 +1,38 @@
+name: One-shot display-volume curve materialization
+
+on:
+  push:
+    branches:
+      - fix/display-step-log-curve-v1.0.3
+    paths:
+      - .github/workflows/one-shot-display-volume-curve.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Materialize and validate display-volume behavior
+        shell: powershell
+        run: .\tools\Materialize-DisplayVolumeCurve.ps1
+
+      - name: Commit materialized sources
+        shell: powershell
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add EarTrumpet/Extensions/FloatExtensions.cs EarTrumpet/Properties/Resources.resx EarTrumpet/Properties/Resources.ja-JP.resx EarTrumpet/UI/ViewModels/EarTrumpetMouseSettingsPageViewModel.cs tools/Optimize-MyMix.ps1 tools/Test-MyMixRefactor.ps1
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Materialize displayed-range wheel step and gentler log curve"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            git push origin HEAD:fix/display-step-log-curve-v1.0.3
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
