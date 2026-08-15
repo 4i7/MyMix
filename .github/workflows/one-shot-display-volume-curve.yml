@@ -28,7 +28,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add EarTrumpet/Extensions/FloatExtensions.cs EarTrumpet/Properties/Resources.resx EarTrumpet/Properties/Resources.ja-JP.resx EarTrumpet/UI/ViewModels/EarTrumpetMouseSettingsPageViewModel.cs tools/Optimize-MyMix.ps1 tools/Test-MyMixRefactor.ps1
+          git add .mymix-optimized EarTrumpet/Extensions/FloatExtensions.cs EarTrumpet/Properties/Resources.resx EarTrumpet/Properties/Resources.ja-JP.resx EarTrumpet/UI/ViewModels/EarTrumpetMouseSettingsPageViewModel.cs tools/Optimize-MyMix.ps1 tools/Test-MyMixRefactor.ps1
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
             git commit -m "Materialize displayed-range wheel step and gentler log curve"
@@ -37,4 +37,4 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
-# Retry after PowerShell 5.1 quoting fix.
+# Retry after metadata materialization fix.
