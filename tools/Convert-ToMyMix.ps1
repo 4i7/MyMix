@@ -4,6 +4,7 @@ param(
     [string]$Archive = "EarTrumpet-master.zip",
     [switch]$KeepArchive,
     [switch]$SkipBuild,
+    [switch]$SkipValidation,
     [switch]$Force
 )
 
@@ -474,7 +475,9 @@ function Invoke-Build {
 
 if ((Test-Path -LiteralPath $Marker) -and -not $Force) {
     Write-Host "MyMix conversion marker already exists."
-    Invoke-Validation
+    if (-not $SkipValidation) {
+        Invoke-Validation
+    }
     Invoke-Build
     exit 0
 }
@@ -493,6 +496,8 @@ if (-not $KeepArchive) {
 }
 
 Write-Text '.mymix-converted' "upstream=File-New-Project/EarTrumpet@aa894e51c22f5f9a939b31b224c4d2d3e163416e`nconverted=$(Get-Date -Format o)`n"
-Invoke-Validation
+if (-not $SkipValidation) {
+    Invoke-Validation
+}
 Invoke-Build
 Write-Host "MyMix conversion complete."

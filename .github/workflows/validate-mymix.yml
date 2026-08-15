@@ -1,16 +1,19 @@
-name: Validate lightweight controls
+name: Validate MyMix
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
-      - feature/lightweight-control-shortcuts
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: validate-lightweight-controls
+  group: validate-mymix-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

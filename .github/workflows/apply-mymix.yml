@@ -29,7 +29,7 @@ jobs:
 
       - name: Convert source to MyMix
         shell: powershell
-        run: .\tools\Convert-ToMyMix.ps1 -SkipBuild
+        run: .\tools\Convert-ToMyMix.ps1 -SkipBuild -SkipValidation
 
       - name: Finalize standalone MyMix runtime
         shell: powershell
