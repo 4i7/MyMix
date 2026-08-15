@@ -52,7 +52,7 @@ permissions:
 
 concurrency:
   group: mymix-source-maintenance-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   update-build-propose:
@@ -95,6 +95,7 @@ jobs:
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
             git diff --cached --stat
+            git diff --cached --no-ext-diff --unified=3
             throw 'Regenerated MyMix differs from committed source. Materialize the transform output in the same pull request before merging.'
           }
 
