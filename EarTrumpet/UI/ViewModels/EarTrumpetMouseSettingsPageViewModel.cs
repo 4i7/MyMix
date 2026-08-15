@@ -1,4 +1,4 @@
-﻿
+using System.Globalization;
 
 namespace EarTrumpet.UI.ViewModels
 {
@@ -15,6 +15,20 @@ namespace EarTrumpet.UI.ViewModels
             get => _settings.UseGlobalMouseWheelHook;
             set => _settings.UseGlobalMouseWheelHook = value;
         }
+
+        public int[] VolumeStepOptions { get; } = new[] { 1, 2, 5, 10 };
+
+        public int VolumeStep
+        {
+            get => _settings.VolumeStep;
+            set
+            {
+                _settings.VolumeStep = value;
+                RaisePropertyChanged(nameof(VolumeStep));
+            }
+        }
+
+        public string VolumeStepText => Properties.Resources.ResourceManager.GetString("SettingsVolumeStepText", CultureInfo.CurrentUICulture) ?? "Volume step (%)";
 
         private readonly AppSettings _settings;
 
