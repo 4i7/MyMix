@@ -1,0 +1,8 @@
+                    new ContextMenuItem
+                    {
+                        DisplayName = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "ja"
+                            ? "Windows サインイン時に MyMix を起動"
+                            : "Start MyMix at Windows sign-in",
+                        IsChecked = IsStartupRegistrationEnabled(),
+                        Command = new RelayCommand(ToggleStartupRegistration),
+                    },
