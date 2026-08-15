@@ -4,26 +4,27 @@ on:
   push:
     branches:
       - feature/lightweight-control-shortcuts
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: validate-lightweight-controls
   cancel-in-progress: true
 
 jobs:
-  optimize-build-test:
-    runs-on: windows-latest
+  architecture-build-test:
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Apply idempotent MyMix optimizer
+      - name: Validate source and runtime architecture invariants
         shell: powershell
-        run: .\tools\Optimize-MyMix.ps1
+        run: .\tools\Test-MyMixRefactor.ps1
 
       - name: Set up NuGet
         uses: NuGet/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
@@ -73,19 +74,3 @@ jobs:
           foreach ($path in @('.\Build', '.\packages', '.\refasm', '.\EarTrumpet\obj')) {
             Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
           }
-
-      - name: Commit validated generated source
-        shell: powershell
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "No generated changes to commit."
-            exit 0
-          }
-          git commit -m "Apply validated lightweight control architecture"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git push
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
