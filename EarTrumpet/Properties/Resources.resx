@@ -670,6 +670,6 @@
     <value>Switch to next playback device</value>
   </data>
   <data name="SettingsVolumeStepText" xml:space="preserve">
-    <value>Volume step (%)</value>
+    <value>Wheel step (% of displayed range)</value>
   </data>
 </root>
