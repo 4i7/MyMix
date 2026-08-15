@@ -65,6 +65,15 @@ Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding Tog
 Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding CycleOutputDeviceHotkey}"'
 Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'ItemsSource="{Binding VolumeStepOptions}"'
 
+# Windows sign-in startup is explicitly opt-in. Launching MyMix must never register it by itself.
+Assert-Contains 'EarTrumpet/App.xaml.cs' 'private static bool IsStartupRegistrationEnabled()'
+Assert-Contains 'EarTrumpet/App.xaml.cs' 'private static void SetStartupRegistration(bool enabled)'
+Assert-Contains 'EarTrumpet/App.xaml.cs' '@"Software\Microsoft\Windows\CurrentVersion\Run"'
+Assert-Contains 'EarTrumpet/App.xaml.cs' 'Command = new RelayCommand(ToggleStartupRegistration)'
+Assert-Contains 'EarTrumpet/App.xaml.cs' 'Windows サインイン時に MyMix を起動'
+Assert-Contains 'EarTrumpet/App.xaml.cs' 'Start MyMix at Windows sign-in'
+Assert-NotContains 'EarTrumpet/App.xaml.cs' 'EnsureStartupRegistration()'
+
 # Process lifetime tracking must be event-driven. No polling thread, timer cadence or busy wait.
 $watcher = 'EarTrumpet/DataModel/ProcessWatcherService.cs'
 Assert-Contains $watcher 'public static IDisposable WatchProcess'
@@ -88,15 +97,20 @@ Assert-Contains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' 'Process
 Assert-Contains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' 'Interlocked.Exchange(ref _disposed, 1)'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceViewModel.cs' 'public override void Dispose()'
 
-# Optimizer metadata and future upstream refresh must preserve the architecture.
-foreach ($marker in @('version=5','peak_meter=30fps-visible-aggregate-smoothed-single-binding','vm_lifetime=explicit-dispose','icon_cache=bounded-frozen','appinfo_cache=per-process','audio_callbacks=coalesced','process_watcher=event-driven-process-exit-disposable-registrations','control_shortcuts=mute-cycle-output-configurable-step')) { Assert-Contains '.mymix-optimized' $marker }
+# Optimizer metadata and future upstream refresh must preserve the architecture and release identity.
+foreach ($marker in @('version=5','peak_meter=30fps-visible-aggregate-smoothed-single-binding','vm_lifetime=explicit-dispose','icon_cache=bounded-frozen','appinfo_cache=per-process','audio_callbacks=coalesced','process_watcher=event-driven-process-exit-disposable-registrations','control_shortcuts=mute-cycle-output-configurable-step','startup=opt-in-hkcu-run')) { Assert-Contains '.mymix-optimized' $marker }
 Assert-Contains 'tools/Optimize-MyMix.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls.ps1'"
+Assert-Contains 'tools/Optimize-MyMix.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/17-startup-option.ps1'"
 Assert-Contains 'tools/Optimize-MyMix/15-lightweight-controls.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls-final.ps1'"
 Assert-PathExists 'tools/Optimize-MyMix/16-appinfo-exit-race.ps1'
+Assert-PathExists 'tools/Optimize-MyMix/17-startup-option.ps1'
+Assert-Contains 'tools/Update-FromEarTrumpet.ps1' 'Restore-MyMixReleaseMetadata'
+Assert-Contains 'tools/Update-FromEarTrumpet.ps1' '& $converter -Force -SkipBuild -SkipValidation'
+Assert-Contains 'tools/Convert-ToMyMix.ps1' '[switch]$SkipValidation'
 Assert-Contains 'tools/Test-ProcessWatcherLifetime.ps1' 'Event-driven ProcessWatcherService registration/lifetime/race/stress validation passed.'
 
 # Distribution workflows remain explicit, reproducible and validate the event-driven lifetime path.
-$workflows = @('.github/workflows/apply-mymix.yml','.github/workflows/update-from-eartrumpet.yml','.github/workflows/release.yml')
+$workflows = @('.github/workflows/apply-mymix.yml','.github/workflows/update-from-eartrumpet.yml','.github/workflows/release.yml','.github/workflows/validate-mymix.yml')
 foreach ($workflow in $workflows) {
     Assert-NotContains $workflow 'actions/upload-artifact'
     Assert-NotContains $workflow 'actions/cache'
@@ -105,6 +119,14 @@ foreach ($workflow in $workflows) {
     Assert-Contains $workflow 'microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57'
     Assert-Contains $workflow '.\tools\Smoke-TestMyMix.ps1'
 }
+Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'Verify regeneration matches committed MyMix source'
+Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'Regenerated MyMix differs from committed source.'
+Assert-NotContains '.github/workflows/update-from-eartrumpet.yml' 'git push origin HEAD:main'
+Assert-Contains '.github/workflows/validate-mymix.yml' 'pull_request:'
+Assert-Contains '.github/workflows/validate-mymix.yml' 'push:'
+Assert-PathMissing '.github/workflows/publish-v1.0.1.yml'
+Assert-PathMissing '.github/workflows/publish-v1.0.2.yml'
+Assert-PathMissing '.github/workflows/validate-lightweight-controls.yml'
 Assert-Contains '.github/workflows/release.yml' 'name: Release MyMix'
 Assert-Contains '.github/workflows/release.yml' 'workflow_dispatch:'
 Assert-Contains '.github/workflows/release.yml' '.\tools\Test-ProcessWatcherLifetime.ps1'
@@ -126,4 +148,4 @@ if ($Failures.Count -gt 0) {
     foreach ($failure in $Failures) { Write-Host " - $failure" -ForegroundColor Red }
     exit 1
 }
-Write-Host 'MyMix refactor/lightweight-runtime/public-release validation passed.' -ForegroundColor Green
+Write-Host 'MyMix refactor/lightweight-runtime/deterministic-regeneration/public-release validation passed.' -ForegroundColor Green
