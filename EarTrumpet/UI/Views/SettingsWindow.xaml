@@ -207,14 +207,6 @@
                             AutoToolTipPlacement="TopLeft"
                             AutoToolTipPrecision="0"
                             Value="{Binding VolumeStep, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    <Grid Width="280" Margin="0,2,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource BodySubText}" Text="1%" />
-                        <TextBlock Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource BodySubText}" Text="10%" />
-                    </Grid>
                 </StackPanel>
             </StackPanel>
         </DataTemplate>
