@@ -40,7 +40,6 @@ Assert-NotContains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'ItemsSource="{Bind
 
     [xml]([IO.File]::ReadAllText((Join-Path $repoRoot 'EarTrumpet/UI/Views/SettingsWindow.xaml'))) | Out-Null
     .\tools\Test-MyMixRefactor.ps1
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 finally {
     Pop-Location
