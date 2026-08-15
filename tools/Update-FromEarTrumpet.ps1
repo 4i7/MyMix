@@ -123,8 +123,10 @@ try {
 
     Copy-UpstreamIntoRepository
 
+    # This is an intermediate conversion stage. Final MyMix invariants are intentionally
+    # validated only after standalone finalization and the optimizer have both completed.
     $converter = Join-Path $PSScriptRoot 'Convert-ToMyMix.ps1'
-    & $converter -Force -SkipBuild
+    & $converter -Force -SkipBuild -SkipValidation
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     # Convert-ToMyMix predates the public documentation and writes its own legacy README.
     # Restore MyMix-owned public docs immediately after that legacy stage.
