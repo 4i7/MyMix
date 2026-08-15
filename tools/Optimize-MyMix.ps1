@@ -59,8 +59,9 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/13-public-hardening.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/14-runtime-stability.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls.ps1')
+. (Resolve-RepoPath 'tools/Optimize-MyMix/17-startup-option.ps1')
 
-Write-Text '.mymix-optimized' "version=5`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`nprocess_watcher=event-driven-process-exit-disposable-registrations`ncontrol_shortcuts=mute-cycle-output-configurable-step`n"
+Write-Text '.mymix-optimized' "version=5`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`nprocess_watcher=event-driven-process-exit-disposable-registrations`ncontrol_shortcuts=mute-cycle-output-configurable-step`nstartup=opt-in-hkcu-run`n"
 
 # Final invariants. These are deliberately behavioral, not just file-existence checks.
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'new Timer(1000.0 / 30.0)'
@@ -102,6 +103,10 @@ Assert-Contains 'EarTrumpet/AppSettings.cs' 'public int VolumeStep'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Settings.ToggleMuteHotkeyTyped += CollectionViewModel.ToggleDefaultMute;'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Settings.CycleOutputDeviceHotkeyTyped += CollectionViewModel.CycleDefaultDevice;'
 Assert-Contains 'EarTrumpet/App.xaml.cs' 'Math.Sign(wheelDelta) * Settings.VolumeStep'
+Assert-Contains 'EarTrumpet/App.xaml.cs' 'private static bool IsStartupRegistrationEnabled()'
+Assert-Contains 'EarTrumpet/App.xaml.cs' 'Command = new RelayCommand(ToggleStartupRegistration)'
+Assert-Contains 'EarTrumpet/App.xaml.cs' '@"Software\Microsoft\Windows\CurrentVersion\Run"'
+Assert-NotContains 'EarTrumpet/App.xaml.cs' 'EnsureStartupRegistration()'
 Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding ToggleMuteHotkey}"'
 Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding CycleOutputDeviceHotkey}"'
 Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'ItemsSource="{Binding VolumeStepOptions}"'
@@ -141,5 +146,6 @@ Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'callback failed
 Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'PollIntervalMilliseconds'
 Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Thread.Sleep('
 Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForSingleObject('
+Assert-Contains '.mymix-optimized' 'startup=opt-in-hkcu-run'
 
-Write-Host 'MyMix deep optimization, public hardening, runtime stability, and lightweight controls pass succeeded.'
+Write-Host 'MyMix deep optimization, public hardening, runtime stability, lightweight controls, and opt-in startup pass succeeded.'
