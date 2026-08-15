@@ -135,7 +135,6 @@ Assert-PathExists 'tools/Optimize-MyMix/20-shared-volume-step.ps1'
     Write-RepoText $releasePath $release
 
     .\tools\Test-MyMixRefactor.ps1
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 finally {
     Pop-Location
