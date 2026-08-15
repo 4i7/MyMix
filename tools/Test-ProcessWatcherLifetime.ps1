@@ -19,7 +19,10 @@ $watch = $type.GetMethod('WatchProcess', [Reflection.BindingFlags]'Public,Static
 $watchers = $type.GetField('s_watchers', [Reflection.BindingFlags]'NonPublic,Static').GetValue($null)
 $sync = $type.GetField('s_lock', [Reflection.BindingFlags]'NonPublic,Static').GetValue($null)
 $flags = [Reflection.BindingFlags]'Public,NonPublic,Instance'
+$staticFlags = [Reflection.BindingFlags]'Public,NonPublic,Static'
 if ($watch.ReturnType -ne [IDisposable]) { throw 'WatchProcess must return IDisposable.' }
+if ($null -ne $type.GetField('s_threadRunning', $staticFlags)) { throw 'ProcessWatcherService still owns a dedicated watcher thread.' }
+if ($null -ne $type.GetField('PollIntervalMilliseconds', $staticFlags)) { throw 'ProcessWatcherService still exposes a polling interval.' }
 
 $helpers = @(Add-Type -PassThru -TypeDefinition @'
 using System;
@@ -172,6 +175,7 @@ public static class TemporaryVmStress {
     }
 }
 '@)
+
 $counterType = @($helpers | Where-Object Name -eq 'WatchCounter')[0]
 $raceType = @($helpers | Where-Object Name -eq 'WatchRace')[0]
 $tempStressType = @($helpers | Where-Object Name -eq 'TemporaryVmStress')[0]
@@ -179,7 +183,7 @@ $tempStressType = @($helpers | Where-Object Name -eq 'TemporaryVmStress')[0]
 function Assert([bool]$ok, [string]$message) { if (-not $ok) { throw $message } }
 function Until([scriptblock]$test, [string]$message, [int]$ms = 6000) {
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    while ($sw.ElapsedMilliseconds -lt $ms) { if (& $test) { return }; Start-Sleep -Milliseconds 25 }
+    while ($sw.ElapsedMilliseconds -lt $ms) { if (& $test) { return }; Start-Sleep -Milliseconds 20 }
     throw $message
 }
 function New-Process { Start-Process (Join-Path $env:WINDIR 'System32\PING.EXE') -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru }
@@ -192,59 +196,64 @@ function Register($p, $counter) {
 function With-Lock([scriptblock]$body) { [Threading.Monitor]::Enter($sync); try { & $body } finally { [Threading.Monitor]::Exit($sync) } }
 function Get-Data([int]$processId) { With-Lock { if ($watchers.ContainsKey($processId)) { $watchers[$processId] } else { $null } } }
 function Callback-Count($data) { With-Lock { $data.GetType().GetField('QuitActions', $flags).GetValue($data).Count } }
-function Handle($data) { With-Lock { [IntPtr]$data.GetType().GetField('ProcessHandle', $flags).GetValue($data) } }
+function Process-Ref($data) { With-Lock { $data.GetType().GetField('Process', $flags).GetValue($data) } }
 function Watcher-Count { With-Lock { $watchers.Count } }
 function Gone([int]$processId, $data) {
     Until { $null -eq (Get-Data $processId) } "PID $processId watcher was not reclaimed."
-    Until { (Handle $data) -eq [IntPtr]::Zero } "PID $processId process handle was not closed by the watcher thread."
+    Until { $null -eq (Process-Ref $data) } "PID $processId Process object was not released."
 }
 
-# Registration A/B and idempotency.
+# Multiple registrations share one event-driven process watcher and dispose independently.
 $p = $null
 try {
     $p = New-Process; $a = New-Counter; $b = New-Counter
     $ra = Register $p $a; $rb = Register $p $b; $data = Get-Data $p.Id
+    Assert ($null -ne $data) 'Expected a watcher entry.'
     Assert ((Callback-Count $data) -eq 2) 'Expected two registrations.'
+    $processField = $data.GetType().GetField('Process', $flags)
+    Assert ($processField.FieldType -eq [Diagnostics.Process]) 'Watcher is not backed by System.Diagnostics.Process.'
     $ra.Dispose(); $ra.Dispose(); $ra.Dispose()
     Assert ((Callback-Count $data) -eq 1) 'Disposing A did not leave exactly B.'
     $p.Kill(); $p.WaitForExit(5000) | Out-Null
     Until { $b.Value -eq 1 } 'B was not called on process exit.'
-    Assert ($a.Value -eq 0) 'Disposed callback A fired.'; Assert ($b.Value -eq 1) 'Callback B fired more than once.'
-    Gone $p.Id $data; $rb.Dispose(); $rb.Dispose()
+    Assert ($a.Value -eq 0) 'Disposed callback A fired.'
+    Assert ($b.Value -eq 1) 'Callback B fired more than once.'
+    Gone $p.Id $data
+    $rb.Dispose(); $rb.Dispose()
 } finally { Stop-ProcessSafe $p }
 
-# Full unregister and watcher/handle reclamation.
+# Full unregister must remove the CLR exit wait while the process remains alive.
 $p = $null
 try {
     $p = New-Process; $a = New-Counter; $b = New-Counter
     $ra = Register $p $a; $rb = Register $p $b; $data = Get-Data $p.Id
     $ra.Dispose(); $rb.Dispose(); $ra.Dispose(); $rb.Dispose()
     Assert ((Callback-Count $data) -eq 0) 'Full unregister did not reach zero callbacks.'
-    Gone $p.Id $data; Assert ($a.Value -eq 0 -and $b.Value -eq 0) 'Callback fired after full unregister.'
+    Gone $p.Id $data
+    Assert ($a.Value -eq 0 -and $b.Value -eq 0) 'Callback fired after full unregister.'
 } finally { Stop-ProcessSafe $p }
 
-# Direct registration stress on one long-lived PID.
+# Repeated register/dispose on a long-lived PID must not retain Process objects or callbacks.
 $p = $null
 try {
     $p = New-Process; $c = New-Counter
     for ($i = 0; $i -lt 1000; $i++) {
-        $r = Register $p $c; $r.Dispose()
-        if (($i % 100) -eq 0) { $d = Get-Data $p.Id; if ($null -ne $d) { Assert ((Callback-Count $d) -le 1) "Callback accumulation at iteration $i." } }
+        $r = Register $p $c
+        $r.Dispose()
+        if (($i % 100) -eq 0) { Until { (Watcher-Count) -eq 0 } "Watcher retained at iteration $i." 3000 }
     }
     Until { (Watcher-Count) -eq 0 } 'Registration stress left a watcher behind.'
     Assert ($c.Value -eq 0) 'Stress callback fired while process was alive.'
 } finally { Stop-ProcessSafe $p }
 
-# Actual TemporaryAppItemViewModel creation -> Expire/Dispose, including child VM subscriptions,
-# repeated 1000 times against one real long-lived process. Callback registrations and weak VM roots
-# must both disappear afterwards.
+# Actual temporary VMs must release process-watch tokens and become collectible.
 $p = $null
 try {
     $p = New-Process
     $tempStressType.GetMethod('Run').Invoke($null, @($exe, [int]$p.Id, 1000))
 } finally { Stop-ProcessSafe $p }
 
-# Process-exit/unregister race.
+# Exit and Dispose may race, but callback delivery must never duplicate and no watcher may survive.
 $counters = New-Object System.Collections.Generic.List[object]
 for ($i = 0; $i -lt 64; $i++) {
     $p = $null
@@ -256,4 +265,4 @@ for ($i = 0; $i -lt 64; $i++) {
 Until { (Watcher-Count) -eq 0 } 'Race test left watchers behind.' 10000
 foreach ($c in $counters) { Assert ($c.Value -le 1) 'Race produced a duplicate callback.' }
 
-Write-Host 'ProcessWatcherService registration + TemporaryAppItemViewModel lifetime/race/stress validation passed.' -ForegroundColor Green
+Write-Host 'Event-driven ProcessWatcherService registration/lifetime/race/stress validation passed.' -ForegroundColor Green

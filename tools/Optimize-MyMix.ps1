@@ -58,8 +58,9 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/12b-public-icon-cleanup.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/13-public-hardening.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/14-runtime-stability.ps1')
+. (Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls.ps1')
 
-Write-Text '.mymix-optimized' "version=4`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`nprocess_watcher=scalable-single-thread-polling-disposable-registrations`n"
+Write-Text '.mymix-optimized' "version=5`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`nprocess_watcher=event-driven-process-exit-disposable-registrations`ncontrol_shortcuts=mute-cycle-output-configurable-step`n"
 
 # Final invariants. These are deliberately behavioral, not just file-existence checks.
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'new Timer(1000.0 / 30.0)'
@@ -71,6 +72,8 @@ Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' '_device
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'foreach (var device in AllDevices)'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'TemporaryAppItemViewModel tempApp = null;'
 Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'tempApp?.Dispose();'
+Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'public void ToggleDefaultMute()'
+Assert-Contains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'public void CycleDefaultDevice()'
 Assert-NotContains 'EarTrumpet/UI/ViewModels/DeviceCollectionViewModel.cs' 'using System.Threading;'
 Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'meter.GetPeakValue()'
 Assert-NotContains 'EarTrumpet/DataModel/WindowsAudio/Internal/Helpers.cs' 'AllocHGlobal'
@@ -89,8 +92,19 @@ Assert-Contains 'EarTrumpet/UI/Controls/ImageEx.cs' 'ConcurrentDictionary<string
 Assert-Contains 'EarTrumpet/UI/Controls/ImageEx.cs' 'image.Freeze()'
 Assert-Contains 'EarTrumpet/DataModel/AppInformation/AppInformationFactory.cs' 'ConcurrentDictionary<int, Lazy<IAppInfo>>'
 Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDevice.cs' 'QueueVolumeUiUpdate();'
+Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDevice.cs' '_deviceVolume.SetMasterVolumeLevelScalar(rawVolume, ref dummy);'
 Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSession.cs' 'QueueVolumeUiUpdate();'
+Assert-Contains 'EarTrumpet/DataModel/WindowsAudio/Internal/AudioDeviceSession.cs' '_simpleVolume.SetMasterVolume(rawVolume, ref dummy);'
 Assert-Contains 'EarTrumpet/AppSettings.cs' 'Runtime reads are memory-only'
+Assert-Contains 'EarTrumpet/AppSettings.cs' 'ToggleMuteHotkeyTyped'
+Assert-Contains 'EarTrumpet/AppSettings.cs' 'CycleOutputDeviceHotkeyTyped'
+Assert-Contains 'EarTrumpet/AppSettings.cs' 'public int VolumeStep'
+Assert-Contains 'EarTrumpet/App.xaml.cs' 'Settings.ToggleMuteHotkeyTyped += CollectionViewModel.ToggleDefaultMute;'
+Assert-Contains 'EarTrumpet/App.xaml.cs' 'Settings.CycleOutputDeviceHotkeyTyped += CollectionViewModel.CycleDefaultDevice;'
+Assert-Contains 'EarTrumpet/App.xaml.cs' 'Math.Sign(wheelDelta) * Settings.VolumeStep'
+Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding ToggleMuteHotkey}"'
+Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding CycleOutputDeviceHotkey}"'
+Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'ItemsSource="{Binding VolumeStepOptions}"'
 Assert-Contains 'EarTrumpet/MyMix.csproj' '<DefineConstants>X86</DefineConstants>'
 Assert-Contains 'EarTrumpet/MyMix.csproj' '<DebugType>none</DebugType>'
 Assert-NotContains 'EarTrumpet/MyMix.csproj' 'Newtonsoft.Json'
@@ -121,9 +135,11 @@ Assert-NotContains 'EarTrumpet/UI/ViewModels/EarTrumpetAboutPageViewModel.cs' 'i
 Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Kernel32.WaitForMultipleObjects('
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'public static IDisposable WatchProcess'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'UnwatchProcess'
-Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'public bool Cancelled;'
-Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'CloseWatcherHandle(data);'
-Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'PollIntervalMilliseconds = 500'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'process.EnableRaisingEvents = true;'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'DisposeProcess(data);'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'callback failed'
+Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'PollIntervalMilliseconds'
+Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Thread.Sleep('
+Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForSingleObject('
 
-Write-Host 'MyMix deep optimization, public hardening, and runtime stability pass succeeded.'
+Write-Host 'MyMix deep optimization, public hardening, runtime stability, and lightweight controls pass succeeded.'

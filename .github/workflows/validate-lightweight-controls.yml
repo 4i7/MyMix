@@ -1,0 +1,76 @@
+name: Validate lightweight controls
+
+on:
+  push:
+    branches:
+      - feature/lightweight-control-shortcuts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-lightweight-controls
+  cancel-in-progress: true
+
+jobs:
+  architecture-build-test:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Validate source and runtime architecture invariants
+        shell: powershell
+        run: .\tools\Test-MyMixRefactor.ps1
+
+      - name: Set up NuGet
+        uses: NuGet/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123 # v4.0
+        with:
+          nuget-version: '7.9.0'
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+
+      - name: Prepare portable .NET Framework 4.6.2 reference assemblies
+        shell: powershell
+        run: |
+          $cacheBase = if ($env:RUNNER_TOOL_CACHE) { Join-Path $env:RUNNER_TOOL_CACHE 'mymix-net462-refasm\1.0.3' } else { Join-Path $env:RUNNER_TEMP 'mymix-net462-refasm\1.0.3' }
+          New-Item -ItemType Directory -Path $cacheBase -Force | Out-Null
+          $packageRoot = Join-Path $cacheBase 'Microsoft.NETFramework.ReferenceAssemblies.net462'
+          $mscorlib = Get-ChildItem $packageRoot -Recurse -Filter mscorlib.dll -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $mscorlib) {
+            Remove-Item $packageRoot -Recurse -Force -ErrorAction SilentlyContinue
+            nuget install Microsoft.NETFramework.ReferenceAssemblies.net462 -Version 1.0.3 -DirectDownload -ExcludeVersion -OutputDirectory $cacheBase
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $mscorlib = Get-ChildItem $packageRoot -Recurse -Filter mscorlib.dll | Select-Object -First 1
+          }
+          if (-not $mscorlib) { throw 'mscorlib.dll was not found in the net462 reference-assemblies cache.' }
+          $frameworkVersionDir = $mscorlib.Directory.FullName
+          $frameworkIdentifierDir = Split-Path $frameworkVersionDir -Parent
+          $targetFrameworkRoot = (Split-Path $frameworkIdentifierDir -Parent) + '\'
+          "MYMIX_TARGET_FRAMEWORK_ROOT=$targetFrameworkRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build Release x86
+        shell: powershell
+        run: |
+          msbuild .\EarTrumpet\MyMix.csproj /m /p:Configuration=Release /p:Platform=x86 /p:TargetFrameworkRootPath="$env:MYMIX_TARGET_FRAMEWORK_ROOT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Validate event-driven watcher lifetime and races
+        shell: powershell
+        run: .\tools\Test-ProcessWatcherLifetime.ps1
+
+      - name: Smoke test startup
+        shell: powershell
+        run: .\tools\Smoke-TestMyMix.ps1
+
+      - name: Remove ephemeral build output
+        if: always()
+        shell: powershell
+        run: |
+          foreach ($path in @('.\Build', '.\packages', '.\refasm', '.\EarTrumpet\obj')) {
+            Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+          }
