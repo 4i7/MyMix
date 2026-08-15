@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: validate-lightweight-controls
@@ -21,6 +21,23 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      - name: Materialize final lightweight-control source stage
+        shell: powershell
+        run: |
+          $Root = (Get-Location).Path
+          $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+          function Resolve-RepoPath([string]$RelativePath) { Join-Path $Root ($RelativePath -replace '/', [IO.Path]::DirectorySeparatorChar) }
+          function Read-Text([string]$RelativePath) { [IO.File]::ReadAllText((Resolve-RepoPath $RelativePath)) }
+          function Write-Text([string]$RelativePath, [string]$Content) { [IO.File]::WriteAllText((Resolve-RepoPath $RelativePath), $Content, $Utf8NoBom) }
+          function Assert-Contains([string]$RelativePath, [string]$Needle) { if (-not (Read-Text $RelativePath).Contains($Needle)) { throw "$RelativePath missing: $Needle" } }
+          function Assert-NotContains([string]$RelativePath, [string]$Needle) { if ((Read-Text $RelativePath).Contains($Needle)) { throw "$RelativePath contains forbidden content: $Needle" } }
+          . (Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls.ps1')
+
+          $testPath = Resolve-RepoPath 'tools/Test-MyMixRefactor.ps1'
+          $test = [IO.File]::ReadAllText($testPath)
+          $test = $test.Replace("tools/Optimize-MyMix/15-process-watcher-race-safe-appinfo.ps1", "tools/Optimize-MyMix/16-appinfo-exit-race.ps1")
+          [IO.File]::WriteAllText($testPath, $test, $Utf8NoBom)
 
       - name: Validate source and runtime architecture invariants
         shell: powershell
@@ -66,6 +83,22 @@ jobs:
       - name: Smoke test startup
         shell: powershell
         run: .\tools\Smoke-TestMyMix.ps1
+
+      - name: Commit validated materialized source
+        shell: powershell
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add EarTrumpet tools/Test-MyMixRefactor.ps1
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host 'No materialized source changes to commit.'
+            exit 0
+          }
+          git commit -m "Materialize validated lightweight control sources"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Remove ephemeral build output
         if: always()
