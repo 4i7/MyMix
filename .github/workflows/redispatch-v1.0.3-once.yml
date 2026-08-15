@@ -1,0 +1,93 @@
+name: Redispatch MyMix v1.0.3 from cleaned main
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/redispatch-v1.0.3-once.yml
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  redispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel stale release dispatch
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const run_id = 31877837027;
+            try {
+              const run = (await github.rest.actions.getWorkflowRun({ owner, repo, run_id })).data;
+              if (run.status !== 'completed') {
+                await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id });
+              }
+              for (let i = 0; i < 20; i++) {
+                const current = (await github.rest.actions.getWorkflowRun({ owner, repo, run_id })).data;
+                if (current.status === 'completed') break;
+                await new Promise(resolve => setTimeout(resolve, 1500));
+              }
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+      - name: Checkout main for self-cleanup
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Remove this helper and publish the cleaned main SHA
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/redispatch-v1.0.3-once.yml
+          git commit -m "Remove v1.0.3 redispatch helper"
+          CLEAN_SHA="$(git rev-parse HEAD)"
+          git push origin HEAD:main
+          echo "CLEAN_SHA=$CLEAN_SHA" >> "$GITHUB_ENV"
+
+      - name: Wait for main ref consistency and dispatch v1.0.3
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          CLEAN_SHA: ${{ env.CLEAN_SHA }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const cleanSha = process.env.CLEAN_SHA;
+            let resolved = false;
+            for (let i = 0; i < 20; i++) {
+              const ref = (await github.rest.git.getRef({ owner, repo, ref: 'heads/main' })).data;
+              if (ref.object.sha === cleanSha) {
+                resolved = true;
+                break;
+              }
+              await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            if (!resolved) throw new Error(`main did not resolve to cleaned commit ${cleanSha}`);
+
+            try {
+              const release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag: 'v1.0.3' })).data;
+              await github.rest.repos.deleteRelease({ owner, repo, release_id: release.id });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            const finalRef = (await github.rest.git.getRef({ owner, repo, ref: 'heads/main' })).data;
+            if (finalRef.object.sha !== cleanSha) throw new Error('main moved before release dispatch');
+
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id: 'release.yml',
+              ref: 'main',
+              inputs: { version: '1.0.3' }
+            });
