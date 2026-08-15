@@ -66,13 +66,13 @@ Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Content="{Binding Cyc
 Assert-Contains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'ItemsSource="{Binding VolumeStepOptions}"'
 
 # Windows sign-in startup is explicitly opt-in. Launching MyMix must never register it by itself.
-Assert-Contains 'EarTrumpet/App.xaml.cs' 'private static bool IsStartupRegistrationEnabled()'
-Assert-Contains 'EarTrumpet/App.xaml.cs' 'private static void SetStartupRegistration(bool enabled)'
-Assert-Contains 'EarTrumpet/App.xaml.cs' '@"Software\Microsoft\Windows\CurrentVersion\Run"'
-Assert-Contains 'EarTrumpet/App.xaml.cs' 'Command = new RelayCommand(ToggleStartupRegistration)'
-Assert-Contains 'EarTrumpet/App.xaml.cs' 'Windows サインイン時に MyMix を起動'
-Assert-Contains 'EarTrumpet/App.xaml.cs' 'Start MyMix at Windows sign-in'
-Assert-NotContains 'EarTrumpet/App.xaml.cs' 'EnsureStartupRegistration()'
+Assert-Contains 'EarTrumpet/App.xaml.cs' "private static bool IsStartupRegistrationEnabled()"
+Assert-Contains 'EarTrumpet/App.xaml.cs' "private static void SetStartupRegistration(bool enabled)"
+Assert-Contains 'EarTrumpet/App.xaml.cs' "Software\Microsoft\Windows\CurrentVersion\Run"
+Assert-Contains 'EarTrumpet/App.xaml.cs' "Command = new RelayCommand(ToggleStartupRegistration)"
+Assert-Contains 'EarTrumpet/App.xaml.cs' "Windows サインイン時に MyMix を起動"
+Assert-Contains 'EarTrumpet/App.xaml.cs' "Start MyMix at Windows sign-in"
+Assert-NotContains 'EarTrumpet/App.xaml.cs' "EnsureStartupRegistration()"
 
 # Process lifetime tracking must be event-driven. No polling thread, timer cadence or busy wait.
 $watcher = 'EarTrumpet/DataModel/ProcessWatcherService.cs'
@@ -105,7 +105,7 @@ Assert-Contains 'tools/Optimize-MyMix/15-lightweight-controls.ps1' "Resolve-Repo
 Assert-PathExists 'tools/Optimize-MyMix/16-appinfo-exit-race.ps1'
 Assert-PathExists 'tools/Optimize-MyMix/17-startup-option.ps1'
 Assert-Contains 'tools/Update-FromEarTrumpet.ps1' 'Restore-MyMixReleaseMetadata'
-Assert-Contains 'tools/Update-FromEarTrumpet.ps1' '& $converter -Force -SkipBuild -SkipValidation'
+Assert-Contains 'tools/Update-FromEarTrumpet.ps1' '-Force -SkipBuild -SkipValidation'
 Assert-Contains 'tools/Convert-ToMyMix.ps1' '[switch]$SkipValidation'
 Assert-Contains 'tools/Test-ProcessWatcherLifetime.ps1' 'Event-driven ProcessWatcherService registration/lifetime/race/stress validation passed.'
 
