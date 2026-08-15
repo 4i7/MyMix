@@ -36,3 +36,5 @@ jobs:
             git push origin HEAD:fix/display-step-log-curve-v1.0.3
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+
+# Retry after PowerShell 5.1 quoting fix.
