@@ -6,7 +6,7 @@ on:
       version:
         description: Release version (must match AssemblyVersion major.minor.patch)
         required: true
-        default: '1.0.3'
+        default: '1.0.4'
         type: string
   push:
     branches:
@@ -25,7 +25,7 @@ jobs:
   release:
     runs-on: self-hosted
     env:
-      RELEASE_VERSION: ${{ inputs.version || '1.0.3' }}
+      RELEASE_VERSION: ${{ inputs.version || '1.0.4' }}
 
     steps:
       - name: Checkout
@@ -140,6 +140,7 @@ jobs:
               'MyMix is an independent, unofficial derivative of EarTrumpet.',
               '',
               'Changes in this release:',
+              '- Fix Japanese settings labels and the volume-step selector display on the mouse settings page.',
               '- Event-driven process lifetime tracking removes the periodic process-watcher polling wake-up.',
               '- Optional hotkeys can toggle default-output mute and switch to the next playback device.',
               '- Tray-wheel volume step can be selected from 1 / 2 / 5 / 10%.',
