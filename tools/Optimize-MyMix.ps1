@@ -60,6 +60,7 @@ function Assert-NotContains([string]$RelativePath, [string]$Needle) {
 . (Resolve-RepoPath 'tools/Optimize-MyMix/14-runtime-stability.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls.ps1')
 . (Resolve-RepoPath 'tools/Optimize-MyMix/17-startup-option.ps1')
+. (Resolve-RepoPath 'tools/Optimize-MyMix/18-settings-ui-fix.ps1')
 
 Write-Text '.mymix-optimized' "version=5`npeak_meter=30fps-visible-aggregate-smoothed-single-binding`ntrace_release=disabled`naddons=removed`nchannels=removed`nlocales=neutral+ja-JP`nvm_lifetime=explicit-dispose`nicon_cache=bounded-frozen`nappinfo_cache=per-process`naudio_callbacks=coalesced`npublic_hardening=unbranded-icons-safe-finalizer-smoke-test`nprocess_watcher=event-driven-process-exit-disposable-registrations`ncontrol_shortcuts=mute-cycle-output-configurable-step`nstartup=opt-in-hkcu-run`n"
 

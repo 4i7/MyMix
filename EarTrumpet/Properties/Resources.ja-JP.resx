@@ -643,10 +643,21 @@
     <value>すべてのデバイスの音量を上げる</value>
   </data>
   <data name="SettingsToggleMuteHotkeyText" xml:space="preserve">
-    <value>譌｢螳壹・蜃ｺ蜉帙ｒ繝溘Η繝ｼ繝亥・繧頑崛縺・
-Ensure-ResxStringFinal </value>
+    <value>既定の出力のミュートを切り替える</value>
   </data>
   <data name="SettingsVolumeStepText" xml:space="preserve">
-    <value>髻ｳ驥上・螟画峩蟷・(%)</value>
+    <value>音量の変更幅 (%)</value>
+  </data>
+  <data name="MouseSettingsPageText" xml:space="preserve">
+    <value>マウス設定</value>
+  </data>
+  <data name="SettingsUseScrollWheelInTray" xml:space="preserve">
+    <value>MyMix アイコン上でスクロールして音量を変更</value>
+  </data>
+  <data name="SettingsUseGlobalMouseWheelHook" xml:space="preserve">
+    <value>フライアウトを開いている間、スクロールして音量を変更</value>
+  </data>
+  <data name="SettingsCycleOutputDeviceHotkeyText" xml:space="preserve">
+    <value>次の再生デバイスに切り替える</value>
   </data>
 </root>
