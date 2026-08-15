@@ -23,7 +23,8 @@ jobs:
           $path = '.\.github\workflows\release.yml'
           $text = [IO.File]::ReadAllText($path)
           $text = $text.Replace("default: '1.0.3'", "default: '1.0.4'")
-          $text = $text.Replace("RELEASE_VERSION: `${{ inputs.version || '1.0.3' }}", "RELEASE_VERSION: `${{ inputs.version || '1.0.4' }}")
+          $replacement = '      RELEASE_VERSION: $' + "{{ inputs.version || '1.0.4' }}"
+          $text = [regex]::Replace($text, '(?m)^      RELEASE_VERSION: .+$', $replacement)
           $anchor = "              'Changes in this release:',"
           $bullet = "              '- Fix Japanese settings labels and the volume-step selector display on the mouse settings page.',"
           if (-not $text.Contains($bullet)) {
