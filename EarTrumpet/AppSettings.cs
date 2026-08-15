@@ -13,6 +13,8 @@ namespace EarTrumpet
         public event Action SettingsHotkeyTyped;
         public event Action AbsoluteVolumeUpHotkeyTyped;
         public event Action AbsoluteVolumeDownHotkeyTyped;
+        public event Action ToggleMuteHotkeyTyped;
+        public event Action CycleOutputDeviceHotkeyTyped;
 
         private readonly ISettingsBag _settings = StorageFactory.GetSettings();
         private HotkeyData _flyoutHotkey;
@@ -20,24 +22,30 @@ namespace EarTrumpet
         private HotkeyData _settingsHotkey;
         private HotkeyData _absoluteVolumeUpHotkey;
         private HotkeyData _absoluteVolumeDownHotkey;
+        private HotkeyData _toggleMuteHotkey;
+        private HotkeyData _cycleOutputDeviceHotkey;
         private bool _isExpanded;
         private bool _useScrollWheelInTray;
         private bool _useGlobalMouseWheelHook;
+        private int _volumeStep;
         private WINDOWPLACEMENT? _fullMixerWindowPlacement;
         private WINDOWPLACEMENT? _settingsWindowPlacement;
 
         public AppSettings()
         {
             // Registry/XML settings are loaded once. Runtime reads are memory-only, which is
-            // important for mouse-wheel and flyout paths that can execute frequently.
+            // important for mouse-wheel, hotkey, and flyout paths that can execute frequently.
             _flyoutHotkey = _settings.Get("Hotkey", new HotkeyData());
             _mixerHotkey = _settings.Get("MixerHotkey", new HotkeyData());
             _settingsHotkey = _settings.Get("SettingsHotkey", new HotkeyData());
             _absoluteVolumeUpHotkey = _settings.Get("AbsoluteVolumeUpHotkey", new HotkeyData());
             _absoluteVolumeDownHotkey = _settings.Get("AbsoluteVolumeDownHotkey", new HotkeyData());
+            _toggleMuteHotkey = _settings.Get("ToggleMuteHotkey", new HotkeyData());
+            _cycleOutputDeviceHotkey = _settings.Get("CycleOutputDeviceHotkey", new HotkeyData());
             _isExpanded = _settings.Get("IsExpanded", false);
             _useScrollWheelInTray = _settings.Get("UseScrollWheelInTray", true);
             _useGlobalMouseWheelHook = _settings.Get("UseGlobalMouseWheelHook", false);
+            _volumeStep = NormalizeVolumeStep(_settings.Get("VolumeStep", 2));
             _fullMixerWindowPlacement = _settings.Get("FullMixerWindowPlacement", default(WINDOWPLACEMENT?));
             _settingsWindowPlacement = _settings.Get("SettingsWindowPlacement", default(WINDOWPLACEMENT?));
         }
@@ -49,6 +57,8 @@ namespace EarTrumpet
             HotkeyManager.Current.Register(_settingsHotkey);
             HotkeyManager.Current.Register(_absoluteVolumeUpHotkey);
             HotkeyManager.Current.Register(_absoluteVolumeDownHotkey);
+            HotkeyManager.Current.Register(_toggleMuteHotkey);
+            HotkeyManager.Current.Register(_cycleOutputDeviceHotkey);
 
             HotkeyManager.Current.KeyPressed += hotkey =>
             {
@@ -77,6 +87,16 @@ namespace EarTrumpet
                     Trace.WriteLine("AppSettings AbsoluteVolumeDownHotkeyTyped");
                     AbsoluteVolumeDownHotkeyTyped?.Invoke();
                 }
+                else if (hotkey.Equals(_toggleMuteHotkey))
+                {
+                    Trace.WriteLine("AppSettings ToggleMuteHotkeyTyped");
+                    ToggleMuteHotkeyTyped?.Invoke();
+                }
+                else if (hotkey.Equals(_cycleOutputDeviceHotkey))
+                {
+                    Trace.WriteLine("AppSettings CycleOutputDeviceHotkeyTyped");
+                    CycleOutputDeviceHotkeyTyped?.Invoke();
+                }
             };
         }
 
@@ -86,6 +106,20 @@ namespace EarTrumpet
             field = value ?? new HotkeyData();
             _settings.Set(key, field);
             HotkeyManager.Current.Register(field);
+        }
+
+        private static int NormalizeVolumeStep(int value)
+        {
+            switch (value)
+            {
+                case 1:
+                case 2:
+                case 5:
+                case 10:
+                    return value;
+                default:
+                    return 2;
+            }
         }
 
         public HotkeyData FlyoutHotkey
@@ -118,6 +152,18 @@ namespace EarTrumpet
             set => SetHotkey("AbsoluteVolumeDownHotkey", ref _absoluteVolumeDownHotkey, value);
         }
 
+        public HotkeyData ToggleMuteHotkey
+        {
+            get => _toggleMuteHotkey;
+            set => SetHotkey("ToggleMuteHotkey", ref _toggleMuteHotkey, value);
+        }
+
+        public HotkeyData CycleOutputDeviceHotkey
+        {
+            get => _cycleOutputDeviceHotkey;
+            set => SetHotkey("CycleOutputDeviceHotkey", ref _cycleOutputDeviceHotkey, value);
+        }
+
         public bool IsExpanded
         {
             get => _isExpanded;
@@ -148,6 +194,18 @@ namespace EarTrumpet
                 if (_useGlobalMouseWheelHook == value) return;
                 _useGlobalMouseWheelHook = value;
                 _settings.Set("UseGlobalMouseWheelHook", value);
+            }
+        }
+
+        public int VolumeStep
+        {
+            get => _volumeStep;
+            set
+            {
+                var normalized = NormalizeVolumeStep(value);
+                if (_volumeStep == normalized) return;
+                _volumeStep = normalized;
+                _settings.Set("VolumeStep", normalized);
             }
         }
 
