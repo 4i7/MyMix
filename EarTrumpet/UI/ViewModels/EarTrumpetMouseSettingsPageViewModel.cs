@@ -18,7 +18,7 @@ namespace EarTrumpet.UI.ViewModels
             }
         }
         public string VolumeStepDisplayText => $"{_settings.VolumeStep}%";
-        public string VolumeStepText => Properties.Resources.ResourceManager.GetString("SettingsVolumeStepText", CultureInfo.CurrentUICulture) ?? "Wheel step (% of displayed range)";
+        public string VolumeStepText => Properties.Resources.ResourceManager.GetString("SettingsVolumeStepText", CultureInfo.CurrentUICulture) ?? "Volume step";
         private readonly AppSettings _settings;
 
         public EarTrumpetMouseSettingsPageViewModel(AppSettings settings) : base(null)

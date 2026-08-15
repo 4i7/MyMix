@@ -128,7 +128,7 @@ namespace EarTrumpet.UI.Controls
 
         private void OnMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            ChangePositionByAmount(Math.Sign(e.Delta) * 2.0);
+            ChangePositionByAmount(Math.Sign(e.Delta) * (EarTrumpet.App.Settings?.VolumeStep ?? 2));
             e.Handled = true;
         }
 
