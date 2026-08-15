@@ -15,6 +15,20 @@ $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $TempBase = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
 $UpstreamWorktree = Join-Path $TempBase ('mymix-eartrumpet-' + [Guid]::NewGuid().ToString('N'))
 $CurrentMarkerText = if (Test-Path -LiteralPath $Marker) { [IO.File]::ReadAllText($Marker) } else { $null }
+
+# Release versioning belongs to MyMix rather than upstream EarTrumpet. Snapshot it before the
+# upstream tree replaces the working copy and restore it after all source transforms finish.
+$CurrentAssemblyVersion = $null
+$CurrentAssemblyFileVersion = $null
+$currentAssemblyInfoPath = Join-Path $Root 'EarTrumpet/Properties/AssemblyInfo.cs'
+if (Test-Path -LiteralPath $currentAssemblyInfoPath) {
+    $currentAssemblyInfo = [IO.File]::ReadAllText($currentAssemblyInfoPath)
+    $match = [regex]::Match($currentAssemblyInfo, 'AssemblyVersion\("([^"]+)"\)')
+    if ($match.Success) { $CurrentAssemblyVersion = $match.Groups[1].Value }
+    $match = [regex]::Match($currentAssemblyInfo, 'AssemblyFileVersion\("([^"]+)"\)')
+    if ($match.Success) { $CurrentAssemblyFileVersion = $match.Groups[1].Value }
+}
+
 $MyMixDocs = @('README.md', 'PRIVACY.md', 'COMPILING.md', 'CONTRIBUTING.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md')
 $MyMixDocSnapshots = @{}
 foreach ($doc in $MyMixDocs) {
@@ -57,6 +71,25 @@ function Restore-MyMixDocs {
     foreach ($doc in $MyMixDocSnapshots.Keys) {
         [IO.File]::WriteAllText((Join-Path $Root $doc), $MyMixDocSnapshots[$doc], $Utf8NoBom)
     }
+}
+
+function Restore-MyMixReleaseMetadata {
+    if (-not $CurrentAssemblyVersion -and -not $CurrentAssemblyFileVersion) { return }
+
+    $path = Join-Path $Root 'EarTrumpet/Properties/AssemblyInfo.cs'
+    if (-not (Test-Path -LiteralPath $path)) { throw 'MyMix AssemblyInfo.cs is missing after regeneration.' }
+    $text = [IO.File]::ReadAllText($path)
+
+    if ($CurrentAssemblyVersion) {
+        if ($text -notmatch 'AssemblyVersion\("[^"]+"\)') { throw 'AssemblyVersion is missing after regeneration.' }
+        $text = [regex]::Replace($text, 'AssemblyVersion\("[^"]+"\)', "AssemblyVersion(`"$CurrentAssemblyVersion`")", 1)
+    }
+    if ($CurrentAssemblyFileVersion) {
+        if ($text -notmatch 'AssemblyFileVersion\("[^"]+"\)') { throw 'AssemblyFileVersion is missing after regeneration.' }
+        $text = [regex]::Replace($text, 'AssemblyFileVersion\("[^"]+"\)', "AssemblyFileVersion(`"$CurrentAssemblyFileVersion`")", 1)
+    }
+
+    [IO.File]::WriteAllText($path, $text, $Utf8NoBom)
 }
 
 function Copy-UpstreamIntoRepository {
@@ -135,6 +168,7 @@ try {
     & (Join-Path $PSScriptRoot 'Finalize-StandaloneMyMix.ps1')
     & (Join-Path $PSScriptRoot 'Optimize-MyMix.ps1')
     Ensure-MyMixBuildMetadata
+    Restore-MyMixReleaseMetadata
 
     if (-not $upstreamChanged -and $CurrentMarkerText) {
         [IO.File]::WriteAllText($Marker, $CurrentMarkerText, $Utf8NoBom)
