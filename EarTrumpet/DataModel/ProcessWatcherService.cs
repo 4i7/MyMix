@@ -1,15 +1,14 @@
-using EarTrumpet.Interop;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
 namespace EarTrumpet.DataModel
 {
-    // Tracks process lifetime for audio-session metadata. MyMix polls each process handle from
-    // one background thread: no hard batch limit, no per-process worker thread, and sub-second
-    // cleanup latency. Each callback has an explicit disposable registration lifetime.
+    // Tracks process lifetime with the CLR's registered process-exit wait. There is no dedicated
+    // watcher thread and no periodic polling wake-up. Callback registrations remain explicitly disposable.
     public class ProcessWatcherService
     {
         private sealed class CallbackRegistration
@@ -28,8 +27,8 @@ namespace EarTrumpet.DataModel
         {
             public int ProcessId;
             public readonly List<CallbackRegistration> QuitActions = new List<CallbackRegistration>();
-            public IntPtr ProcessHandle;
-            public bool Cancelled;
+            public Process Process;
+            public EventHandler ExitedHandler;
         }
 
         private sealed class Registration : IDisposable
@@ -58,11 +57,9 @@ namespace EarTrumpet.DataModel
             public void Dispose() { }
         }
 
-        private const int PollIntervalMilliseconds = 500;
         private static readonly object s_lock = new object();
         private static readonly Dictionary<int, ProcessWatcherData> s_watchers = new Dictionary<int, ProcessWatcherData>();
         private static long s_nextRegistrationId;
-        private static bool s_threadRunning;
 
         public static IDisposable WatchProcess(int processId, Action<int> processQuit)
         {
@@ -75,49 +72,72 @@ namespace EarTrumpet.DataModel
             {
                 if (s_watchers.TryGetValue(processId, out var existing))
                 {
-                    existing.Cancelled = false;
                     existing.QuitActions.Add(callbackRegistration);
                     return new Registration(processId, registrationId);
                 }
             }
 
-            var handle = Kernel32.OpenProcess(Kernel32.ProcessFlags.SYNCHRONIZE, false, processId);
-            if (handle == IntPtr.Zero)
+            Process process;
+            try
             {
-                Trace.WriteLine($"ProcessWatcherService OpenProcess failed: {processId}");
+                process = Process.GetProcessById(processId);
+            }
+            catch (ArgumentException)
+            {
+                return EmptyRegistration.Instance;
+            }
+            catch (InvalidOperationException)
+            {
+                return EmptyRegistration.Instance;
+            }
+            catch (Win32Exception ex)
+            {
+                Trace.WriteLine($"ProcessWatcherService open failed for {processId}: {ex.Message}");
                 return EmptyRegistration.Instance;
             }
 
-            if (Kernel32.WaitForSingleObject(handle, 0) != Kernel32.WAIT_TIMEOUT)
-            {
-                Kernel32.CloseHandle(handle);
-                return EmptyRegistration.Instance;
-            }
-
-            var data = new ProcessWatcherData { ProcessId = processId, ProcessHandle = handle };
+            var data = new ProcessWatcherData { ProcessId = processId, Process = process };
             data.QuitActions.Add(callbackRegistration);
+            data.ExitedHandler = (_, __) => CompleteWatcher(data, invokeCallbacks: true);
+            process.Exited += data.ExitedHandler;
 
+            var raced = false;
             lock (s_lock)
             {
-                if (s_watchers.TryGetValue(processId, out var raced))
+                if (s_watchers.TryGetValue(processId, out var existing))
                 {
-                    raced.Cancelled = false;
-                    raced.QuitActions.Add(callbackRegistration);
-                    Kernel32.CloseHandle(handle);
-                    return new Registration(processId, registrationId);
+                    existing.QuitActions.Add(callbackRegistration);
+                    raced = true;
                 }
+                else
+                {
+                    s_watchers.Add(processId, data);
+                }
+            }
 
-                s_watchers.Add(processId, data);
-                if (!s_threadRunning)
-                {
-                    s_threadRunning = true;
-                    var thread = new Thread(WatcherLoop)
-                    {
-                        IsBackground = true,
-                        Name = "MyMix Process Watcher"
-                    };
-                    thread.Start();
-                }
+            if (raced)
+            {
+                DisposeProcess(data);
+                return new Registration(processId, registrationId);
+            }
+
+            try
+            {
+                // EnableRaisingEvents registers a wait on the process handle with the CLR. The
+                // callback runs only on exit, so idle operation has no polling cadence.
+                process.EnableRaisingEvents = true;
+            }
+            catch (InvalidOperationException ex)
+            {
+                Trace.WriteLine($"ProcessWatcherService enable failed for {processId}: {ex.Message}");
+                CompleteWatcher(data, invokeCallbacks: false);
+                return EmptyRegistration.Instance;
+            }
+            catch (Win32Exception ex)
+            {
+                Trace.WriteLine($"ProcessWatcherService enable failed for {processId}: {ex.Message}");
+                CompleteWatcher(data, invokeCallbacks: false);
+                return EmptyRegistration.Instance;
             }
 
             return new Registration(processId, registrationId);
@@ -125,102 +145,81 @@ namespace EarTrumpet.DataModel
 
         private static void UnwatchProcess(int processId, long registrationId)
         {
+            ProcessWatcherData toDispose = null;
+
             lock (s_lock)
             {
                 if (!s_watchers.TryGetValue(processId, out var data)) return;
 
-                data.QuitActions.RemoveAll(registration => registration.Id == registrationId);
+                for (var i = data.QuitActions.Count - 1; i >= 0; i--)
+                {
+                    if (data.QuitActions[i].Id == registrationId)
+                    {
+                        data.QuitActions.RemoveAt(i);
+                        break;
+                    }
+                }
+
                 if (data.QuitActions.Count == 0)
                 {
-                    // Do not close here. WatcherLoop may already hold a snapshot containing this handle.
-                    data.Cancelled = true;
+                    s_watchers.Remove(processId);
+                    toDispose = data;
+                }
+            }
+
+            if (toDispose != null) DisposeProcess(toDispose);
+        }
+
+        private static void CompleteWatcher(ProcessWatcherData data, bool invokeCallbacks)
+        {
+            CallbackRegistration[] callbacks = null;
+
+            lock (s_lock)
+            {
+                if (!s_watchers.TryGetValue(data.ProcessId, out var current) || !ReferenceEquals(current, data))
+                {
+                    return;
+                }
+
+                s_watchers.Remove(data.ProcessId);
+                if (invokeCallbacks) callbacks = data.QuitActions.ToArray();
+                data.QuitActions.Clear();
+            }
+
+            DisposeProcess(data);
+
+            if (callbacks == null) return;
+            for (var i = 0; i < callbacks.Length; i++)
+            {
+                try
+                {
+                    callbacks[i].Callback(data.ProcessId);
+                }
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"ProcessWatcherService callback failed: {ex}");
                 }
             }
         }
 
-        private static void CloseWatcherHandle(ProcessWatcherData data)
+        private static void DisposeProcess(ProcessWatcherData data)
         {
-            var handle = data.ProcessHandle;
-            if (handle == IntPtr.Zero) return;
-            data.ProcessHandle = IntPtr.Zero;
-            Kernel32.CloseHandle(handle);
-        }
+            var process = data.Process;
+            data.Process = null;
+            var handler = data.ExitedHandler;
+            data.ExitedHandler = null;
 
-        private static void WatcherLoop()
-        {
-            while (true)
+            if (process == null) return;
+            try
             {
-                ProcessWatcherData[] snapshot;
-                lock (s_lock)
-                {
-                    if (s_watchers.Count == 0)
-                    {
-                        s_threadRunning = false;
-                        return;
-                    }
-                    snapshot = s_watchers.Values.ToArray();
-                }
-
-                for (var i = 0; i < snapshot.Length; i++)
-                {
-                    var data = snapshot[i];
-                    var waitResult = Kernel32.WaitForSingleObject(data.ProcessHandle, 0);
-                    CallbackRegistration[] callbacks = null;
-                    var cancelled = false;
-                    var shouldClose = false;
-
-                    lock (s_lock)
-                    {
-                        if (!s_watchers.TryGetValue(data.ProcessId, out var current) || !ReferenceEquals(current, data))
-                        {
-                            continue;
-                        }
-
-                        cancelled = data.Cancelled;
-                        if (cancelled)
-                        {
-                            s_watchers.Remove(data.ProcessId);
-                            shouldClose = true;
-                        }
-                        else if (waitResult != Kernel32.WAIT_TIMEOUT)
-                        {
-                            s_watchers.Remove(data.ProcessId);
-                            shouldClose = true;
-                            if (waitResult != Kernel32.WAIT_FAILED) callbacks = data.QuitActions.ToArray();
-                        }
-                    }
-
-                    if (!shouldClose) continue;
-
-                    try
-                    {
-                        if (!cancelled && waitResult == Kernel32.WAIT_FAILED)
-                        {
-                            Trace.WriteLine($"ProcessWatcherService wait failed: {data.ProcessId}");
-                        }
-                        else if (callbacks != null)
-                        {
-                            for (var callbackIndex = 0; callbackIndex < callbacks.Length; callbackIndex++)
-                            {
-                                try
-                                {
-                                    callbacks[callbackIndex].Callback(data.ProcessId);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Trace.WriteLine($"ProcessWatcherService callback failed: {ex}");
-                                }
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        // Published handles are closed only by this watcher thread after snapshot use.
-                        CloseWatcherHandle(data);
-                    }
-                }
-
-                Thread.Sleep(PollIntervalMilliseconds);
+                if (handler != null) process.Exited -= handler;
+            }
+            catch (InvalidOperationException)
+            {
+            }
+            finally
+            {
+                process.Dispose();
             }
         }
     }
