@@ -82,16 +82,9 @@ namespace EarTrumpet
 
         private static int NormalizeVolumeStep(int value)
         {
-            switch (value)
-            {
-                case 1:
-                case 2:
-                case 5:
-                case 10:
-                    return value;
-                default:
-                    return 2;
-            }
+            if (value < 1) return 1;
+            if (value > 10) return 10;
+            return value;
         }
 
         public HotkeyData FlyoutHotkey { get => _flyoutHotkey; set => SetHotkey("Hotkey", ref _flyoutHotkey, value); }

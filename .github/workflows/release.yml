@@ -6,7 +6,7 @@ on:
       version:
         description: Release version (must match AssemblyVersion major.minor.patch)
         required: true
-        default: '1.0.4'
+        default: '1.0.3'
         type: string
   push:
     branches:
@@ -25,7 +25,7 @@ jobs:
   release:
     runs-on: self-hosted
     env:
-      RELEASE_VERSION: ${{ inputs.version || '1.0.4' }}
+      RELEASE_VERSION: ${{ inputs.version || '1.0.3' }}
 
     steps:
       - name: Checkout
@@ -140,12 +140,13 @@ jobs:
               'MyMix is an independent, unofficial derivative of EarTrumpet.',
               '',
               'Changes in this release:',
-              '- Fix Japanese settings labels and the volume-step selector display on the mouse settings page.',
+              '- Fix Japanese settings labels on the mouse settings page.',
+              '- Replace the volume-step selector with a non-editable 1-10% slider that snaps to whole percentages.',
+              '- Remove the volume-step ComboBox path that could leak the settings-search placeholder into the control.',
               '- Event-driven process lifetime tracking removes the periodic process-watcher polling wake-up.',
               '- Optional hotkeys can toggle default-output mute and switch to the next playback device.',
-              '- Tray-wheel volume step can be selected from 1 / 2 / 5 / 10%.',
               '- Windows sign-in startup remains explicitly opt-in.',
-              '- Upstream regeneration now preserves MyMix-specific release/startup metadata and rejects semantic drift.',
+              '- Upstream regeneration preserves MyMix-specific release/startup metadata and rejects semantic drift.',
               '',
               `EarTrumpet upstream: \`${upstream[1]}\``,
               'Build: standalone Windows x86 / .NET Framework 4.6.2 target',
@@ -167,7 +168,28 @@ jobs:
               release = (await github.rest.repos.updateRelease({ owner, repo, release_id: release.id, target_commitish: context.sha, name: `MyMix ${process.env.RELEASE_VERSION}`, body, draft: true, prerelease: false })).data;
             } catch (error) {
               if (error.status !== 404) throw error;
+
+              // A deleted GitHub Release can leave its tag behind. If no release exists, repair
+              // that orphaned tag before creating the new validated release so source and assets
+              // always refer to the same commit.
+              try {
+                const existingRef = (await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` })).data;
+                if (existingRef.object.type !== 'commit') {
+                  throw new Error(`${tag} is not a lightweight commit tag; refusing to retarget it automatically.`);
+                }
+                if (existingRef.object.sha !== context.sha) {
+                  await github.rest.git.updateRef({ owner, repo, ref: `tags/${tag}`, sha: context.sha, force: true });
+                }
+              } catch (refError) {
+                if (refError.status !== 404) throw refError;
+              }
+
               release = (await github.rest.repos.createRelease({ owner, repo, tag_name: tag, target_commitish: context.sha, name: `MyMix ${process.env.RELEASE_VERSION}`, body, draft: true, prerelease: false })).data;
+            }
+
+            const finalRef = (await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` })).data;
+            if (finalRef.object.type !== 'commit' || finalRef.object.sha !== context.sha) {
+              throw new Error(`${tag} does not point to the validated release commit ${context.sha}.`);
             }
             return String(release.id);
 
