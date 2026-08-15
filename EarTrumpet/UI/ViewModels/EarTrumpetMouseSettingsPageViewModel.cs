@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 
 namespace EarTrumpet.UI.ViewModels
@@ -6,12 +7,17 @@ namespace EarTrumpet.UI.ViewModels
     {
         public bool UseScrollWheelInTray { get => _settings.UseScrollWheelInTray; set => _settings.UseScrollWheelInTray = value; }
         public bool UseGlobalMouseWheelHook { get => _settings.UseGlobalMouseWheelHook; set => _settings.UseGlobalMouseWheelHook = value; }
-        public int[] VolumeStepOptions { get; } = new[] { 1, 2, 5, 10 };
-        public int VolumeStep
+        public double VolumeStep
         {
             get => _settings.VolumeStep;
-            set { _settings.VolumeStep = value; RaisePropertyChanged(nameof(VolumeStep)); }
+            set
+            {
+                _settings.VolumeStep = (int)Math.Round(value, MidpointRounding.AwayFromZero);
+                RaisePropertyChanged(nameof(VolumeStep));
+                RaisePropertyChanged(nameof(VolumeStepDisplayText));
+            }
         }
+        public string VolumeStepDisplayText => $"{_settings.VolumeStep}%";
         public string VolumeStepText => Properties.Resources.ResourceManager.GetString("SettingsVolumeStepText", CultureInfo.CurrentUICulture) ?? "Volume step (%)";
         private readonly AppSettings _settings;
 
