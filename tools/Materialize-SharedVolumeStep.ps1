@@ -82,9 +82,10 @@ Assert-NotContains 'EarTrumpet/UI/Views/SettingsWindow.xaml' 'Text="10%"'
     $metadataPath = '.mymix-optimized'
     $metadata = Read-RepoText $metadataPath
     if (-not $metadata.Contains('volume_step=shared-tray-and-slider')) {
-        $metadataOld = "volume_control=logarithmic-3.5-display-step`nstartup=opt-in-hkcu-run"
-        $metadataNew = "volume_control=logarithmic-3.5-display-step`nvolume_step=shared-tray-and-slider`nstartup=opt-in-hkcu-run"
-        $metadata = Replace-LiteralOnce $metadata $metadataOld $metadataNew 'materialized optimizer metadata'
+        $metadataPattern = 'volume_control=logarithmic-3\.5-display-step\r?\nstartup=opt-in-hkcu-run'
+        $metadataMatches = [regex]::Matches($metadata, $metadataPattern)
+        if ($metadataMatches.Count -ne 1) { throw 'Materialized optimizer metadata anchor must appear exactly once.' }
+        $metadata = [regex]::Replace($metadata, $metadataPattern, "volume_control=logarithmic-3.5-display-step`r`nvolume_step=shared-tray-and-slider`r`nstartup=opt-in-hkcu-run", 1)
         Write-RepoText $metadataPath $metadata
     }
 
