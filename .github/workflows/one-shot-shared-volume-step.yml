@@ -28,7 +28,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .mymix-optimized .github/workflows/release.yml EarTrumpet/UI/Controls/VolumeSlider.cs EarTrumpet/UI/Views/SettingsWindow.xaml EarTrumpet/Properties/Resources.resx EarTrumpet/Properties/Resources.ja-JP.resx EarTrumpet/UI/ViewModels/EarTrumpetMouseSettingsPageViewModel.cs tools/Optimize-MyMix.ps1 tools/Test-MyMixRefactor.ps1
+          git add .mymix-optimized EarTrumpet/UI/Controls/VolumeSlider.cs EarTrumpet/UI/Views/SettingsWindow.xaml EarTrumpet/Properties/Resources.resx EarTrumpet/Properties/Resources.ja-JP.resx EarTrumpet/UI/ViewModels/EarTrumpetMouseSettingsPageViewModel.cs tools/Optimize-MyMix.ps1 tools/Test-MyMixRefactor.ps1
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
             git commit -m "Share configured volume step with in-window wheel handling"
@@ -37,4 +37,4 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
-# Retry after validation-exit handling fix.
+# Retry without staging release.yml because GITHUB_TOKEN cannot update workflow files.
