@@ -10,33 +10,16 @@ permissions:
 
 concurrency:
   group: validate-lightweight-controls
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   optimize-build-test:
-    runs-on: self-hosted
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-
-      - name: Normalize new optimizer stage bootstrap
-        shell: powershell
-        run: |
-          $path = '.\tools\Optimize-MyMix\15-lightweight-controls.ps1'
-          $lines = Get-Content -LiteralPath $path
-          $fixed = foreach ($line in $lines) {
-            if ($line -match '^\$settingsWindow = \$settingsWindow\.Replace\(.*?, 1\)$') {
-              continue
-            }
-            if ($line -match '^\s*\$mouseAnchor = ''\s*<CheckBox HorizontalAlignment=') {
-              '    $mouseAnchor = ''IsChecked="{Binding UseGlobalMouseWheelHook, Mode=TwoWay}" />'''
-              continue
-            }
-            $line
-          }
-          [IO.File]::WriteAllLines((Resolve-Path $path), $fixed, (New-Object Text.UTF8Encoding($false)))
 
       - name: Apply idempotent MyMix optimizer
         shell: powershell
