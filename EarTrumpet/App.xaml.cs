@@ -6,6 +6,7 @@ using EarTrumpet.Interop.Helpers;
 using EarTrumpet.UI.Helpers;
 using EarTrumpet.UI.ViewModels;
 using EarTrumpet.UI.Views;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -46,6 +47,11 @@ namespace EarTrumpet
         {
             _isSmokeTest = e.Args.Any(arg => string.Equals(arg, "--smoke-test", StringComparison.OrdinalIgnoreCase));
 
+            if (!_isSmokeTest)
+            {
+                EnsureStartupRegistration();
+            }
+
             Exit += (_, __) => IsShuttingDown = true;
             HasIdentity = false;
             HasDevIdentity = false;
@@ -72,6 +78,30 @@ namespace EarTrumpet
             else
             {
                 Shutdown();
+            }
+        }
+
+        private static void EnsureStartupRegistration()
+        {
+            const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+            const string valueName = "MyMix";
+
+            try
+            {
+                var executablePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                var command = $"\"{executablePath}\"";
+
+                using (var runKey = Registry.CurrentUser.OpenSubKey(runKeyPath, writable: true) ?? Registry.CurrentUser.CreateSubKey(runKeyPath))
+                {
+                    if (runKey != null && !string.Equals(runKey.GetValue(valueName) as string, command, StringComparison.OrdinalIgnoreCase))
+                    {
+                        runKey.SetValue(valueName, command);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"App EnsureStartupRegistration failed: {ex}");
             }
         }
 
