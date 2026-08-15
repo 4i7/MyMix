@@ -1,0 +1,64 @@
+name: Replace failed MyMix v1.0.3 once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/replace-v1.0.3-once.yml
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  replace:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete the currently published failed v1.0.3 release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = 'v1.0.3';
+            let release;
+            try {
+              release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(`${tag} release is already absent; continuing with replacement.`);
+                return;
+              }
+              throw error;
+            }
+            if (release.draft) throw new Error(`${tag} is a draft; refusing the published-release replacement path.`);
+            await github.rest.repos.deleteRelease({ owner, repo, release_id: release.id });
+            core.info(`Deleted failed published release ${tag}; the existing tag is intentionally left for release.yml to retarget after validation.`);
+
+      - name: Checkout main for self-cleanup
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Remove this one-shot workflow before the release commit is tagged
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/replace-v1.0.3-once.yml
+          git commit -m "Remove one-shot v1.0.3 replacement workflow"
+          git push origin HEAD:main
+
+      - name: Dispatch validated v1.0.3 release from cleaned main
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'release.yml',
+              ref: 'main',
+              inputs: { version: '1.0.3' }
+            });
+            core.info('Dispatched Release MyMix for v1.0.3 from cleaned main.');
