@@ -12,8 +12,6 @@ namespace EarTrumpet.DataModel.AppInformation.Internal
         private Action<IAppInfo> _stoppedHandlers;
         private bool _isStopped;
 
-        // Process exit can now be delivered immediately by the event-driven watcher. Make the
-        // notification sticky so subscribers attached just after construction cannot miss it.
         public event Action<IAppInfo> Stopped
         {
             add
@@ -91,7 +89,6 @@ namespace EarTrumpet.DataModel.AppInformation.Internal
             }
             handlers?.Invoke(this);
         }
-
         private static string GetAppUserModelIdByPid(int processId)
         {
             string appUserModelId = string.Empty;

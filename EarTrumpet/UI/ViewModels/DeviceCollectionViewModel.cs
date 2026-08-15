@@ -164,7 +164,6 @@ namespace EarTrumpet.UI.ViewModels
                 Default?.UpdatePeakValueForeground();
             }
         }
-
         private void PeakMeterTimer_Elapsed(object sender, ElapsedEventArgs e)
         {
             // Never overlap Core Audio sampling if one frame takes longer than 33 ms.
@@ -210,26 +209,19 @@ namespace EarTrumpet.UI.ViewModels
         {
             var count = AllDevices.Count;
             if (count == 0) return;
-
             var currentId = Default?.Id;
             var currentIndex = -1;
             if (currentId != null)
             {
                 for (var i = 0; i < count; i++)
                 {
-                    if (string.Equals(AllDevices[i].Id, currentId, StringComparison.Ordinal))
-                    {
-                        currentIndex = i;
-                        break;
-                    }
+                    if (string.Equals(AllDevices[i].Id, currentId, StringComparison.Ordinal)) { currentIndex = i; break; }
                 }
             }
-
             var nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % count;
             if (nextIndex == currentIndex) return;
             AllDevices[nextIndex].MakeDefaultDevice();
         }
-
         public void MoveAppToDevice(IAppItemViewModel app, DeviceViewModel dev)
         {
             // Collect all matching apps on all devices.

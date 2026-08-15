@@ -6,7 +6,6 @@ using EarTrumpet.Interop.Helpers;
 using EarTrumpet.UI.Helpers;
 using EarTrumpet.UI.ViewModels;
 using EarTrumpet.UI.Views;
-using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -76,61 +75,6 @@ namespace EarTrumpet
             }
         }
 
-        private static bool IsStartupRegistrationEnabled()
-        {
-            const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-            const string valueName = "MyMix";
-
-            try
-            {
-                using (var runKey = Registry.CurrentUser.OpenSubKey(runKeyPath, writable: false))
-                {
-                    return runKey?.GetValue(valueName) != null;
-                }
-            }
-            catch (Exception ex)
-            {
-                Trace.WriteLine($"App IsStartupRegistrationEnabled failed: {ex}");
-                return false;
-            }
-        }
-
-        private static void ToggleStartupRegistration()
-        {
-            SetStartupRegistration(!IsStartupRegistrationEnabled());
-        }
-
-        private static void SetStartupRegistration(bool enabled)
-        {
-            const string runKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-            const string valueName = "MyMix";
-
-            try
-            {
-                using (var runKey = Registry.CurrentUser.OpenSubKey(runKeyPath, writable: true) ?? Registry.CurrentUser.CreateSubKey(runKeyPath))
-                {
-                    if (runKey == null)
-                    {
-                        return;
-                    }
-
-                    if (enabled)
-                    {
-                        var executablePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-                        runKey.SetValue(valueName, $"\"{executablePath}\"");
-                    }
-                    else
-                    {
-                        runKey.DeleteValue(valueName, throwOnMissingValue: false);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Trace.WriteLine($"App SetStartupRegistration failed: {ex}");
-            }
-        }
-
         private void ContinueStartup()
         {
             ((UI.Themes.Manager)Resources["ThemeManager"]).Load();
@@ -184,7 +128,7 @@ namespace EarTrumpet
                 var hWndTray = WindowsTaskbar.GetTrayToolbarWindowHwnd();
                 var hWndTooltip = User32.SendMessage(hWndTray, User32.TB_GETTOOLTIPS, IntPtr.Zero, IntPtr.Zero);
                 User32.SendMessage(hWndTooltip, User32.TTM_POPUP, IntPtr.Zero, IntPtr.Zero);
-
+                
                 CollectionViewModel.Default?.IncrementVolume(Math.Sign(wheelDelta) * Settings.VolumeStep);
             }
         }
@@ -262,7 +206,6 @@ namespace EarTrumpet
                 {
                     new ContextMenuItem { DisplayName = EarTrumpet.Properties.Resources.FullWindowTitleText, Command = new RelayCommand(_mixerWindow.OpenOrBringToFront) },
                     new ContextMenuItem { DisplayName = EarTrumpet.Properties.Resources.SettingsWindowText, Command = new RelayCommand(_settingsWindow.OpenOrBringToFront) },
-                    new ContextMenuItem { DisplayName = "Windows サインイン時に MyMix を起動", IsChecked = IsStartupRegistrationEnabled(), Command = new RelayCommand(ToggleStartupRegistration) },
                     new ContextMenuItem { DisplayName = EarTrumpet.Properties.Resources.ContextMenuExitTitle, Command = new RelayCommand(Shutdown) },
                 });
             return ret;
@@ -286,7 +229,6 @@ namespace EarTrumpet
             var viewModel = new SettingsViewModel(EarTrumpet.Properties.Resources.SettingsWindowText, allCategories);
             return new SettingsWindow { DataContext = viewModel };
         }
-
         private Window CreateMixerExperience() => new FullWindow { DataContext = new FullWindowViewModel(CollectionViewModel) };
 
         private void AbsoluteVolumeIncrement()
@@ -303,8 +245,9 @@ namespace EarTrumpet
         {
             foreach (var device in CollectionViewModel.AllDevices.Where(d => !d.IsMuted))
             {
-                // if device is not muted but will be muted by
+                // if device is not muted but will be muted by 
                 bool wasMuted = device.IsMuted;
+                // device.IncrementVolume(-2);
                 device.Volume -= Settings.VolumeStep;
                 // if device is muted by this absolute down
                 // .IsMuted is not already updated
