@@ -160,11 +160,13 @@ namespace EarTrumpet
             Settings.SettingsHotkeyTyped += () => _settingsWindow.OpenOrBringToFront();
             Settings.AbsoluteVolumeUpHotkeyTyped += AbsoluteVolumeIncrement;
             Settings.AbsoluteVolumeDownHotkeyTyped += AbsoluteVolumeDecrement;
+            Settings.ToggleMuteHotkeyTyped += CollectionViewModel.ToggleDefaultMute;
+            Settings.CycleOutputDeviceHotkeyTyped += CollectionViewModel.CycleDefaultDevice;
             Settings.RegisterHotkeys();
 
             _trayIcon.PrimaryInvoke += (_, type) => _flyoutViewModel.OpenFlyout(type);
             _trayIcon.SecondaryInvoke += (_, args) => _trayIcon.ShowContextMenu(GetTrayContextMenuItems(), args.Point);
-            _trayIcon.TertiaryInvoke += (_, __) => CollectionViewModel.Default?.ToggleMute.Execute(null);
+            _trayIcon.TertiaryInvoke += (_, __) => CollectionViewModel.ToggleDefaultMute();
             _trayIcon.Scrolled += trayIconScrolled;
             _trayIcon.SetTooltip(CollectionViewModel.GetTrayToolTip());
             _trayIcon.IsVisible = true;
@@ -182,8 +184,8 @@ namespace EarTrumpet
                 var hWndTray = WindowsTaskbar.GetTrayToolbarWindowHwnd();
                 var hWndTooltip = User32.SendMessage(hWndTray, User32.TB_GETTOOLTIPS, IntPtr.Zero, IntPtr.Zero);
                 User32.SendMessage(hWndTooltip, User32.TTM_POPUP, IntPtr.Zero, IntPtr.Zero);
-                
-                CollectionViewModel.Default?.IncrementVolume(Math.Sign(wheelDelta) * 2);
+
+                CollectionViewModel.Default?.IncrementVolume(Math.Sign(wheelDelta) * Settings.VolumeStep);
             }
         }
 
@@ -284,6 +286,7 @@ namespace EarTrumpet
             var viewModel = new SettingsViewModel(EarTrumpet.Properties.Resources.SettingsWindowText, allCategories);
             return new SettingsWindow { DataContext = viewModel };
         }
+
         private Window CreateMixerExperience() => new FullWindow { DataContext = new FullWindowViewModel(CollectionViewModel) };
 
         private void AbsoluteVolumeIncrement()
@@ -292,7 +295,7 @@ namespace EarTrumpet
             {
                 // in any case this device is not abs muted anymore
                 device.IsAbsMuted = false;
-                device.IncrementVolume(2);
+                device.IncrementVolume(Settings.VolumeStep);
             }
         }
 
@@ -300,10 +303,9 @@ namespace EarTrumpet
         {
             foreach (var device in CollectionViewModel.AllDevices.Where(d => !d.IsMuted))
             {
-                // if device is not muted but will be muted by 
+                // if device is not muted but will be muted by
                 bool wasMuted = device.IsMuted;
-                // device.IncrementVolume(-2);
-                device.Volume -= 2;
+                device.Volume -= Settings.VolumeStep;
                 // if device is muted by this absolute down
                 // .IsMuted is not already updated
                 if (!wasMuted == (device.Volume <= 0))
