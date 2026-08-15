@@ -1,4 +1,4 @@
-﻿using EarTrumpet.Interop;
+using EarTrumpet.Interop;
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -8,7 +8,34 @@ namespace EarTrumpet.DataModel.AppInformation.Internal
 {
     class ModernAppInfo : IAppInfo
     {
-        public event Action<IAppInfo> Stopped;
+        private readonly object _stoppedLock = new object();
+        private Action<IAppInfo> _stoppedHandlers;
+        private bool _isStopped;
+
+        // Process exit can now be delivered immediately by the event-driven watcher. Make the
+        // notification sticky so subscribers attached just after construction cannot miss it.
+        public event Action<IAppInfo> Stopped
+        {
+            add
+            {
+                if (value == null) return;
+                var invokeNow = false;
+                lock (_stoppedLock)
+                {
+                    if (_isStopped) invokeNow = true;
+                    else _stoppedHandlers += value;
+                }
+                if (invokeNow) value(this);
+            }
+            remove
+            {
+                if (value == null) return;
+                lock (_stoppedLock)
+                {
+                    _stoppedHandlers -= value;
+                }
+            }
+        }
 
         public string ExeName { get; }
         public string DisplayName { get; }
@@ -48,8 +75,21 @@ namespace EarTrumpet.DataModel.AppInformation.Internal
 
             if (trackProcess)
             {
-                ProcessWatcherService.WatchProcess(processId, (pid) => Stopped?.Invoke(this));
+                ProcessWatcherService.WatchProcess(processId, pid => NotifyStopped());
             }
+        }
+
+        private void NotifyStopped()
+        {
+            Action<IAppInfo> handlers;
+            lock (_stoppedLock)
+            {
+                if (_isStopped) return;
+                _isStopped = true;
+                handlers = _stoppedHandlers;
+                _stoppedHandlers = null;
+            }
+            handlers?.Invoke(this);
         }
 
         private static string GetAppUserModelIdByPid(int processId)
