@@ -1,10 +1,24 @@
 # MyMix
 
-MyMix is an independent Windows volume-mixer derivative based on [EarTrumpet](https://github.com/File-New-Project/EarTrumpet). It focuses on a smaller standalone x86 build, a logarithmic-only volume path, and reduced background/runtime work.
+MyMix is an independent Windows volume-mixer derivative based on [EarTrumpet](https://github.com/File-New-Project/EarTrumpet). It keeps EarTrumpet's Core Audio/WPF foundation while deliberately reducing feature scope and restructuring several high-frequency and lifetime-sensitive paths to reduce persistent background and UI work.
 
 MyMix is **not an official EarTrumpet release** and is not maintained, supported, or endorsed by the EarTrumpet project. Internal `EarTrumpet.*` namespaces are intentionally retained where renaming them would add compatibility risk without changing the product identity.
 
 ## What MyMix changes
+
+The main technical differences are not limited to hiding UI features. MyMix also removes unused runtime models, adds back-pressure to hot paths, and makes several resource lifetimes explicit.
+
+- **Peak-meter hot path:** keeps a 30 FPS target, but uses a single aggregate Core Audio peak read, samples only devices needed by the visible surface, reuses cached device snapshots, drops overlapping samples, allows at most one pending render refresh, and applies lightweight release smoothing.
+- **Core Audio callback back-pressure:** device/session volume callbacks capture the newest state immediately but coalesce repeated UI invalidations into at most one pending Dispatcher update instead of building a backlog of obsolete intermediate states.
+- **Process and view-model lifetime:** process monitoring is event-driven through `Process.Exited` with disposable registrations, while mixer view models use explicit `IDisposable` cleanup when devices/sessions leave their owning collections.
+- **Shared process metadata and race handling:** tracked app information is shared per PID with `ConcurrentDictionary<int, Lazy<IAppInfo>>`, and process-stop notifications remain observable even if a subscriber attaches after the process already stopped.
+- **Bounded icon reuse:** Shell/GDI icon results are cached as DPI-aware, frozen WPF image sources with a 256-entry bound.
+- **Smaller audio/runtime model:** per-channel volume objects and channel callback processing are removed because MyMix does not expose per-channel control; settings are loaded into memory once, and volume handling uses one logarithmic path with separate raw and display values.
+- **Regeneratable upstream conversion:** EarTrumpet updates are imported into an isolated tree, converted, finalized, optimized through named stages, provenance-checked, and validated instead of relying only on manual merge conflict resolution.
+
+For implementation-level details, affected files, behavioral trade-offs, and notes for selectively porting individual changes back to EarTrumpet, see **[TECHNICAL_CHANGES.md](TECHNICAL_CHANGES.md)**. The exact EarTrumpet revision used by the current tree is recorded in [`.mymix-converted`](.mymix-converted).
+
+Other intentional scope/product differences include:
 
 - Removes the numeric volume labels at the right side of device/app rows and returns that space to the sliders.
 - Uses logarithmic volume mapping as the only volume mapping path.
@@ -13,8 +27,6 @@ MyMix is **not an official EarTrumpet release** and is not maintained, supported
 - Removes EarTrumpet add-on/extensibility hosting from the standalone build.
 - Removes the legacy icon-selection feature and does not redistribute EarTrumpet's bundled application/horn icon as MyMix branding.
 - Uses Windows audio/system icon resources for tray volume states, with a stock system fallback if those resources are unavailable.
-- Keeps the peak meter at a 30 FPS target while reducing work through aggregate peak reads, visible-device scoping, cached snapshots, coalesced UI updates, and lightweight release smoothing.
-- Uses explicit view-model cleanup, bounded/frozen icon caching, per-process app-information caching, and coalesced Core Audio callback updates.
 - Stores unpackaged settings under the current user's `Software\MyMix` registry key.
 
 ## Download
@@ -41,7 +53,7 @@ See [PRIVACY.md](PRIVACY.md) for details.
 
 `tools/Update-FromEarTrumpet.ps1` can import an EarTrumpet revision into a clean work tree, reapply the MyMix transformation/optimizer stages, validate invariants, and build it on the self-hosted Windows runner. Upstream updates are kept reviewable rather than being blindly merged into `main`.
 
-The exact EarTrumpet source revision used by the current tree is recorded in `.mymix-converted`. `UPSTREAM_README.md` preserves the imported upstream README for reference.
+The exact EarTrumpet source revision used by the current tree is recorded in `.mymix-converted`. `UPSTREAM_README.md` preserves the imported upstream README for reference. MyMix-owned documentation, including `TECHNICAL_CHANGES.md`, is preserved across the regeneration flow.
 
 ## License and attribution
 
