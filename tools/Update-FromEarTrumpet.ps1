@@ -29,7 +29,7 @@ if (Test-Path -LiteralPath $currentAssemblyInfoPath) {
     if ($match.Success) { $CurrentAssemblyFileVersion = $match.Groups[1].Value }
 }
 
-$MyMixDocs = @('README.md', 'PRIVACY.md', 'COMPILING.md', 'CONTRIBUTING.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md')
+$MyMixDocs = @('README.md', 'TECHNICAL_CHANGES.md', 'PRIVACY.md', 'COMPILING.md', 'CONTRIBUTING.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md')
 $MyMixDocSnapshots = @{}
 foreach ($doc in $MyMixDocs) {
     $path = Join-Path $Root $doc
