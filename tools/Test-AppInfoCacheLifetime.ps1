@@ -16,7 +16,6 @@ $exe = (Resolve-Path $Executable).Path
 $assembly = [Reflection.Assembly]::LoadFrom($exe)
 $watcherType = $assembly.GetType('EarTrumpet.DataModel.ProcessWatcherService', $true)
 $factoryType = $assembly.GetType('EarTrumpet.DataModel.AppInformation.AppInformationFactory', $true)
-$iAppInfoType = $assembly.GetType('EarTrumpet.DataModel.AppInformation.IAppInfo', $true)
 $staticFlags = [Reflection.BindingFlags]'Public,NonPublic,Static'
 $instanceFlags = [Reflection.BindingFlags]'Public,NonPublic,Instance'
 
@@ -28,6 +27,9 @@ $getProcessField = $watcherType.GetField('s_getProcessById', $staticFlags)
 $enableField = $watcherType.GetField('s_enableRaisingEvents', $staticFlags)
 $originalGetProcess = $getProcessField.GetValue($null)
 $originalEnable = $enableField.GetValue($null)
+$watchersType = $watchers.GetType()
+$watchersContainsKey = $watchersType.GetMethod('ContainsKey')
+$watchersItem = $watchersType.GetProperty('Item')
 
 $createForProcess = $factoryType.GetMethod('CreateForProcess', [Reflection.BindingFlags]'Public,Static')
 $createTrackedLazy = $factoryType.GetMethod('CreateTrackedLazy', $staticFlags)
@@ -53,6 +55,7 @@ public sealed class LifetimeCounter {
     private int _count;
     public int Value { get { return Volatile.Read(ref _count); } }
     public void Hit(int processId) { Interlocked.Increment(ref _count); }
+    public void HitObject(object value) { Interlocked.Increment(ref _count); }
 }
 
 public sealed class ReflectionInvocationThread {
@@ -162,22 +165,9 @@ public static class LifetimeSeams {
 }
 '@)
 
-$appCounterTypes = @(Add-Type -PassThru -ReferencedAssemblies $exe -TypeDefinition @'
-using System;
-using System.Threading;
-using EarTrumpet.DataModel.AppInformation;
-
-public sealed class AppInfoStoppedCounter {
-    private int _count;
-    public int Value { get { return Volatile.Read(ref _count); } }
-    public void Hit(IAppInfo info) { Interlocked.Increment(ref _count); }
-}
-'@)
-
 $counterType = @($helpers | Where-Object Name -eq 'LifetimeCounter')[0]
 $invocationType = @($helpers | Where-Object Name -eq 'ReflectionInvocationThread')[0]
 $seamType = @($helpers | Where-Object Name -eq 'LifetimeSeams')[0]
-$appCounterType = @($appCounterTypes | Where-Object Name -eq 'AppInfoStoppedCounter')[0]
 
 function Assert([bool]$ok, [string]$message) { if (-not $ok) { throw $message } }
 function Until([scriptblock]$test, [string]$message, [int]$ms = 6000) {
@@ -203,8 +193,15 @@ function With-WatcherLock([scriptblock]$body) {
     [Threading.Monitor]::Enter($watcherLock)
     try { & $body } finally { [Threading.Monitor]::Exit($watcherLock) }
 }
-function Get-Watcher([int]$processId) { With-WatcherLock { if ($watchers.Contains($processId)) { $watchers[$processId] } else { $null } } }
-function Watcher-Contains([int]$processId) { With-WatcherLock { $watchers.Contains($processId) } }
+function Watcher-Contains([int]$processId) { With-WatcherLock { [bool]$watchersContainsKey.Invoke($watchers, @([int]$processId)) } }
+function Get-Watcher([int]$processId) {
+    With-WatcherLock {
+        if ([bool]$watchersContainsKey.Invoke($watchers, @([int]$processId))) {
+            $watchersItem.GetValue($watchers, @([int]$processId))
+        }
+        else { $null }
+    }
+}
 function Watcher-CallbackCount($data) { With-WatcherLock { $data.GetType().GetField('QuitActions', $instanceFlags).GetValue($data).Count } }
 function Tracked-Contains([int]$processId) { [bool]$trackedContains.Invoke($tracked, @([int]$processId)) }
 function Tracked-Get([int]$processId) { if (Tracked-Contains $processId) { $trackedItem.GetValue($tracked, @([int]$processId)) } else { $null } }
@@ -333,12 +330,12 @@ try {
         $entry = Factory-Create $p.Id
         $p.Kill(); $p.WaitForExit(5000) | Out-Null
         Until { Entry-IsStopped $entry } 'Test H Entry did not become stopped.'
-        $appCounter = [Activator]::CreateInstance($appCounterType)
-        $actionType = [Action`1].MakeGenericType($iAppInfoType)
-        $handler = [Delegate]::CreateDelegate($actionType, $appCounter, $appCounterType.GetMethod('Hit'))
-        $entry.GetType().GetEvent('Stopped').AddEventHandler($entry, $handler)
+        $appCounter = New-Counter
+        $stoppedEvent = $entry.GetType().GetEvent('Stopped')
+        $handler = [Delegate]::CreateDelegate($stoppedEvent.EventHandlerType, $appCounter, $counterType.GetMethod('HitObject'))
+        $stoppedEvent.AddEventHandler($entry, $handler)
         Assert ($appCounter.Value -eq 1) 'Test H late Stopped subscriber was not invoked immediately once.'
-        $entry.GetType().GetEvent('Stopped').RemoveEventHandler($entry, $handler)
+        $stoppedEvent.RemoveEventHandler($entry, $handler)
     } finally { Stop-ProcessSafe $p; Restore-Seams }
 
     # Test I - an unpublished candidate must not be visible/shared while EnableRaisingEvents is unresolved.
