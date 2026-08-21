@@ -219,7 +219,7 @@ jobs:
 
             const existing = (await github.rest.repos.listReleaseAssets({ owner, repo, release_id, per_page: 100 })).data;
             for (const asset of existing) {
-              if (asset.name === 'MyMix-x86.zip' || asset.name === 'SHA256SUMS.txt') await github.rest.repos.deleteReleaseAsset({ owner, repo, release_id, asset_id: asset.id });
+              if (asset.name === 'MyMix-x86.zip' || asset.name === 'SHA256SUMS.txt') await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
             }
 
             const uploadBase = release.upload_url.replace('{?name,label}', '');
