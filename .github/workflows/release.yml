@@ -182,18 +182,19 @@ jobs:
               }
             }
 
-            let release;
-            try {
-              release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
-              if (!release.draft) {
-                core.setFailed(`${tag} is already published; refusing to overwrite it.`);
-                return;
-              }
-              await ensureTagRef();
+            const releases = (await github.rest.repos.listReleases({ owner, repo, per_page: 100 })).data;
+            let release = releases.find(item => item.tag_name === tag);
+
+            if (release && !release.draft) {
+              core.setFailed(`${tag} is already published; refusing to overwrite it.`);
+              return;
+            }
+
+            await ensureTagRef();
+
+            if (release) {
               release = (await github.rest.repos.updateRelease({ owner, repo, release_id: release.id, target_commitish: context.sha, name: `MyMix ${process.env.RELEASE_VERSION}`, body, draft: true, prerelease: false })).data;
-            } catch (error) {
-              if (error.status !== 404) throw error;
-              await ensureTagRef();
+            } else {
               release = (await github.rest.repos.createRelease({ owner, repo, tag_name: tag, target_commitish: context.sha, name: `MyMix ${process.env.RELEASE_VERSION}`, body, draft: true, prerelease: false })).data;
             }
 
