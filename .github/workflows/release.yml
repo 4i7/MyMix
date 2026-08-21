@@ -91,6 +91,10 @@ jobs:
         shell: powershell
         run: .\tools\Test-ProcessWatcherLifetime.ps1
 
+      - name: Validate AppInfo cache and process-generation races
+        shell: powershell
+        run: .\tools\Test-AppInfoCacheLifetime.ps1
+
       - name: Smoke test MyMix startup
         shell: powershell
         run: .\tools\Smoke-TestMyMix.ps1
@@ -254,5 +258,5 @@ jobs:
             "Version: v$env:RELEASE_VERSION",
             'Distribution: GitHub Release assets',
             'GitHub Actions artifact/cache upload: disabled (0 bytes)',
-            'Release requires source validation, Release/x86 compilation, event-driven watcher lifetime/race validation, and startup smoke test before publication.'
+            'Release requires source validation, Release/x86 compilation, process-watcher + AppInfo cache lifecycle/race validation, and startup smoke test before publication.'
           ) -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

@@ -1,3 +1,6 @@
+# Generation-aware ProcessWatcherService finalization. This runs after the broad stage-15
+# controls rewrite so upstream regeneration cannot restore publish-before-enable or PID-only lifetime rules.
+Write-Text 'EarTrumpet/DataModel/ProcessWatcherService.cs' @'
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -582,3 +585,21 @@ namespace EarTrumpet.DataModel
         }
     }
 }
+'@
+
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'ProcessWatchStatus'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'ProcessGenerationState'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'private ProcessWatchLease('
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'ProcessWatchLease.Create'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'ExitObserved'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'IsPublished'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Completed'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 's_getProcessById'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 's_enableRaisingEvents'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'GetUnpublishedCandidateState'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'GetPublishedGenerationState'
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'ReferenceEquals(current, winner)'
+Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Thread.Sleep('
+Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'PollIntervalMilliseconds'
+Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForSingleObject('
+Assert-NotContains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'WaitForMultipleObjects('

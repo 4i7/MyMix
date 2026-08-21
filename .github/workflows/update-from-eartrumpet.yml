@@ -27,6 +27,7 @@ on:
       - tools/Optimize-MyMix/**
       - tools/Test-MyMixRefactor.ps1
       - tools/Test-ProcessWatcherLifetime.ps1
+      - tools/Test-AppInfoCacheLifetime.ps1
       - tools/Smoke-TestMyMix.ps1
   push:
     branches:
@@ -42,6 +43,7 @@ on:
       - tools/Optimize-MyMix/**
       - tools/Test-MyMixRefactor.ps1
       - tools/Test-ProcessWatcherLifetime.ps1
+      - tools/Test-AppInfoCacheLifetime.ps1
       - tools/Smoke-TestMyMix.ps1
 
 # Deliberately no schedule: a newly changed upstream revision must not be compiled automatically
@@ -138,6 +140,12 @@ jobs:
         shell: powershell
         run: .\tools\Test-ProcessWatcherLifetime.ps1
 
+      - name: Validate AppInfo cache and process-generation lifetime
+        id: appinfo
+        if: steps.sync.outputs.changed == 'true'
+        shell: powershell
+        run: .\tools\Test-AppInfoCacheLifetime.ps1
+
       - name: Smoke test MyMix startup
         id: smoke
         if: steps.sync.outputs.changed == 'true'
@@ -199,7 +207,7 @@ jobs:
                 'Maintainer-initiated EarTrumpet upstream refresh.', '',
                 `Upstream ref: \`${process.env.UPSTREAM_REF}\``,
                 `Upstream commit: \`${process.env.UPSTREAM_SHA}\``, '',
-                'MyMix conversion, public hardening, static validation, process-watcher lifetime/race stress validation, Release/x86 compilation, and startup smoke test passed on the self-hosted runner.', '',
+                'MyMix conversion, public hardening, static validation, process-watcher and AppInfo cache lifecycle/race validation, Release/x86 compilation, and startup smoke test passed on the self-hosted runner.', '',
                 'No GitHub Actions artifact or cache was uploaded.', '',
                 'Review upstream behavior/UI changes before merging this PR into `main`.'
               ].join('\n'),
@@ -214,6 +222,7 @@ jobs:
           DRIFT_OUTCOME: ${{ steps.drift.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           WATCHER_OUTCOME: ${{ steps.watcher.outcome }}
+          APPINFO_OUTCOME: ${{ steps.appinfo.outcome }}
           SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
           CHANGED: ${{ steps.sync.outputs.changed }}
           UPSTREAM_CHANGED: ${{ steps.sync.outputs.upstream_changed }}
@@ -228,13 +237,14 @@ jobs:
           elseif ($env:CHANGED -ne 'true') { $lines += 'No new EarTrumpet commit was found for the requested ref.' }
           elseif ($env:BUILD_OUTCOME -ne 'success') { $lines += 'Release x86 build failed. Nothing was published.' }
           elseif ($env:WATCHER_OUTCOME -ne 'success') { $lines += 'Process-watcher lifetime/race stress validation failed. Nothing was published.' }
+          elseif ($env:APPINFO_OUTCOME -ne 'success') { $lines += 'AppInfo cache/process-generation lifecycle validation failed. Nothing was published.' }
           elseif ($env:SMOKE_OUTCOME -ne 'success') { $lines += 'Startup smoke test failed. Nothing was published.' }
-          elseif ($env:UPSTREAM_CHANGED -ne 'true') { $lines += 'Clean regeneration, public hardening, process-watcher lifetime/race stress validation, build, and startup smoke test passed.' }
+          elseif ($env:UPSTREAM_CHANGED -ne 'true') { $lines += 'Clean regeneration, lifecycle/race validation, build, and startup smoke test passed.' }
           elseif ($env:EVENT_NAME -eq 'pull_request') { $lines += 'Upstream changed during PR validation; regenerated source passed validation but no branch or release was published.' }
           else {
             $lines += "EarTrumpet commit: ``$env:UPSTREAM_SHA``"
             $lines += "Validated branch: ``$env:UPDATE_BRANCH``"
-            $lines += 'Process-watcher lifetime/race stress validation + Release x86 build + startup smoke test: passed'
+            $lines += 'Process-watcher + AppInfo cache lifecycle/race validation + Release x86 build + startup smoke test: passed'
             if ($env:PR_URL) { $lines += "Pull request: $env:PR_URL" }
           }
           $lines -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

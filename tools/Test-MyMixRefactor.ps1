@@ -98,24 +98,45 @@ Assert-Contains 'EarTrumpet/App.xaml.cs' "Command = new RelayCommand(ToggleStart
 Assert-Contains 'EarTrumpet/App.xaml.cs' "Start MyMix at Windows sign-in"
 Assert-NotContains 'EarTrumpet/App.xaml.cs' "EnsureStartupRegistration()"
 
-# Process lifetime tracking must be event-driven. No polling thread, timer cadence or busy wait.
+# Process lifetime tracking is generation-aware, event-driven and never publishes an unresolved watcher candidate.
 $watcher = 'EarTrumpet/DataModel/ProcessWatcherService.cs'
-Assert-Contains $watcher 'public static IDisposable WatchProcess'
-Assert-Contains $watcher 'process.EnableRaisingEvents = true;'
-Assert-Contains $watcher 'public Process Process;'
-Assert-Contains $watcher 'UnwatchProcess'
-Assert-Contains $watcher 'DisposeProcess(data);'
-Assert-Contains $watcher 'ProcessWatcherService callback failed'
-foreach ($forbidden in @('PollIntervalMilliseconds','Thread.Sleep(','WaitForSingleObject(','WaitForMultipleObjects(','s_threadRunning','new Thread(WatcherLoop)')) { Assert-NotContains $watcher $forbidden }
+foreach ($needle in @(
+    'public static IDisposable WatchProcess',
+    'internal static ProcessWatchLease TryWatchProcess',
+    'ProcessWatchStatus',
+    'ProcessGenerationState',
+    'private ProcessWatchLease(',
+    'public bool IsPublished;',
+    'public bool ExitObserved;',
+    'public bool Completed;',
+    's_getProcessById',
+    's_enableRaisingEvents',
+    'GetUnpublishedCandidateState',
+    'GetPublishedGenerationState',
+    'ReferenceEquals(current, winner)',
+    'UnwatchProcess(ProcessWatcherData expected',
+    'ProcessWatcherService callback failed')) { Assert-Contains $watcher $needle }
+foreach ($forbidden in @('PollIntervalMilliseconds','Thread.Sleep(','WaitForSingleObject(','WaitForMultipleObjects(','s_threadRunning','new Thread(WatcherLoop)','UnwatchProcess(int processId')) { Assert-NotContains $watcher $forbidden }
 
-# Event delivery may happen during construction, so app metadata stop notification must be sticky.
+# Event delivery may happen during construction, so both legacy metadata classes and the cached Entry keep sticky one-shot stop semantics.
 foreach ($appInfo in @('EarTrumpet/DataModel/AppInformation/Internal/DesktopAppInfo.cs','EarTrumpet/DataModel/AppInformation/Internal/ModernAppInfo.cs')) {
     Assert-Contains $appInfo 'private readonly object _stoppedLock = new object();'
     Assert-Contains $appInfo 'private bool _isStopped;'
     Assert-Contains $appInfo 'if (_isStopped) invokeNow = true;'
     Assert-Contains $appInfo 'NotifyStopped()'
 }
-Assert-Contains 'EarTrumpet/DataModel/AppInformation/AppInformationFactory.cs' 'ConcurrentDictionary<int, Lazy<IAppInfo>>'
+$factory = 'EarTrumpet/DataModel/AppInformation/AppInformationFactory.cs'
+foreach ($needle in @(
+    'ConcurrentDictionary<int, Lazy<ProcessAppInfoEntry>>',
+    'LazyThreadSafetyMode.ExecutionAndPublication',
+    'ICollection<KeyValuePair<int, Lazy<ProcessAppInfoEntry>>>',
+    'ReferenceEquals(actualLazy, candidateLazy)',
+    'ProcessWatcherService.TryWatchProcess',
+    'CreateCore(processId, false)',
+    'EntryValidationState',
+    'private sealed class ProcessAppInfoEntry : IAppInfo')) { Assert-Contains $factory $needle }
+Assert-NotContains $factory 'ConcurrentDictionary<int, Lazy<IAppInfo>>'
+Assert-NotContains $factory 'PublicationOnly'
 Assert-Contains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' '_processWatchRegistrations'
 Assert-Contains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' 'ProcessWatcherService.WatchProcess(pid, OnProcessQuit)'
 Assert-Contains 'EarTrumpet/UI/ViewModels/TemporaryAppItemViewModel.cs' 'Interlocked.Exchange(ref _disposed, 1)'
@@ -130,14 +151,23 @@ Assert-PathExists 'tools/Optimize-MyMix/19-display-volume-curve.ps1'
 Assert-Contains 'tools/Optimize-MyMix.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/20-shared-volume-step.ps1'"
 Assert-PathExists 'tools/Optimize-MyMix/20-shared-volume-step.ps1'
 Assert-Contains 'tools/Optimize-MyMix/15-lightweight-controls.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/15-lightweight-controls-final.ps1'"
+Assert-Contains 'tools/Optimize-MyMix/15-lightweight-controls.ps1' "Resolve-RepoPath 'tools/Optimize-MyMix/15-process-watcher-lifecycle.ps1'"
+Assert-PathExists 'tools/Optimize-MyMix/15-process-watcher-lifecycle.ps1'
 Assert-PathExists 'tools/Optimize-MyMix/16-appinfo-exit-race.ps1'
 Assert-PathExists 'tools/Optimize-MyMix/17-startup-option.ps1'
+Assert-Contains 'tools/Optimize-MyMix/10-appinfo-cache.ps1' 'ConcurrentDictionary<int, Lazy<ProcessAppInfoEntry>>'
+Assert-Contains 'tools/Optimize-MyMix/15-process-watcher-lifecycle.ps1' 'GetUnpublishedCandidateState'
+Assert-Contains 'tools/Optimize-MyMix/15-process-watcher-lifecycle.ps1' 'ReferenceEquals(current, winner)'
 Assert-Contains 'tools/Update-FromEarTrumpet.ps1' 'Restore-MyMixReleaseMetadata'
 Assert-Contains 'tools/Update-FromEarTrumpet.ps1' '-Force -SkipBuild -SkipValidation'
 Assert-Contains 'tools/Convert-ToMyMix.ps1' '[switch]$SkipValidation'
 Assert-Contains 'tools/Test-ProcessWatcherLifetime.ps1' 'Event-driven ProcessWatcherService registration/lifetime/race/stress validation passed.'
+Assert-PathExists 'tools/Test-AppInfoCacheLifetime.ps1'
+Assert-Contains 'tools/Test-AppInfoCacheLifetime.ps1' 'AppInfo cache/process-generation lifecycle validation passed.'
+Assert-Contains 'tools/Test-AppInfoCacheLifetime.ps1' 'Test I - an unpublished candidate must not be visible/shared'
+Assert-Contains 'tools/Test-AppInfoCacheLifetime.ps1' 'Test K - an exited candidate generation cannot transfer its callback'
 
-# Distribution workflows remain explicit, reproducible and validate the event-driven lifetime path.
+# Distribution workflows remain explicit, reproducible and validate both watcher and AppInfo cache lifecycle paths.
 $workflows = @('.github/workflows/apply-mymix.yml','.github/workflows/update-from-eartrumpet.yml','.github/workflows/release.yml','.github/workflows/validate-mymix.yml')
 foreach ($workflow in $workflows) {
     Assert-NotContains $workflow 'actions/upload-artifact'
@@ -145,10 +175,13 @@ foreach ($workflow in $workflows) {
     Assert-Contains $workflow 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
     Assert-Contains $workflow 'NuGet/setup-nuget@fd55a6f3b34392fa83fde1454582407d8c714123'
     Assert-Contains $workflow 'microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57'
+    Assert-Contains $workflow '.\tools\Test-ProcessWatcherLifetime.ps1'
+    Assert-Contains $workflow '.\tools\Test-AppInfoCacheLifetime.ps1'
     Assert-Contains $workflow '.\tools\Smoke-TestMyMix.ps1'
 }
 Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'Verify regeneration matches committed MyMix source'
 Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'Regenerated MyMix differs from committed source.'
+Assert-Contains '.github/workflows/update-from-eartrumpet.yml' 'tools/Test-AppInfoCacheLifetime.ps1'
 Assert-NotContains '.github/workflows/update-from-eartrumpet.yml' 'git push origin HEAD:main'
 Assert-Contains '.github/workflows/validate-mymix.yml' 'pull_request:'
 Assert-Contains '.github/workflows/validate-mymix.yml' 'push:'
@@ -157,7 +190,6 @@ Assert-PathMissing '.github/workflows/publish-v1.0.2.yml'
 Assert-PathMissing '.github/workflows/validate-lightweight-controls.yml'
 Assert-Contains '.github/workflows/release.yml' 'name: Release MyMix'
 Assert-Contains '.github/workflows/release.yml' 'workflow_dispatch:'
-Assert-Contains '.github/workflows/release.yml' '.\tools\Test-ProcessWatcherLifetime.ps1'
 Assert-Contains '.github/workflows/release.yml' 'release.upload_url'
 Assert-Contains '.github/workflows/release.yml' 'MyMix-x86.zip'
 Assert-Contains '.github/workflows/release.yml' 'SHA256SUMS.txt'
