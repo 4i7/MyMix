@@ -231,6 +231,21 @@ namespace EarTrumpet.DataModel
 
             while (true)
             {
+                // Exited event delivery can lag the process becoming signaled. Validate the
+                // unpublished generation before every publication attempt so HasExited closes
+                // that window even when ExitObserved has not been latched yet.
+                var candidateState = GetUnpublishedCandidateState(data);
+                if (candidateState == ProcessGenerationState.Exited)
+                {
+                    DisposeUnpublishedCandidate(data);
+                    return ProcessWatchLease.Create(ProcessWatchStatus.AlreadyExited, null, registrationId);
+                }
+                if (candidateState == ProcessGenerationState.Unknown)
+                {
+                    DisposeUnpublishedCandidate(data);
+                    return ProcessWatchLease.Create(ProcessWatchStatus.Unavailable, null, registrationId);
+                }
+
                 ProcessWatcherData winner;
                 var candidateExited = false;
 
@@ -255,18 +270,6 @@ namespace EarTrumpet.DataModel
                 {
                     DisposeUnpublishedCandidate(data);
                     return ProcessWatchLease.Create(ProcessWatchStatus.AlreadyExited, null, registrationId);
-                }
-
-                var candidateState = GetUnpublishedCandidateState(data);
-                if (candidateState == ProcessGenerationState.Exited)
-                {
-                    DisposeUnpublishedCandidate(data);
-                    return ProcessWatchLease.Create(ProcessWatchStatus.AlreadyExited, null, registrationId);
-                }
-                if (candidateState == ProcessGenerationState.Unknown)
-                {
-                    DisposeUnpublishedCandidate(data);
-                    return ProcessWatchLease.Create(ProcessWatchStatus.Unavailable, null, registrationId);
                 }
 
                 var winnerState = GetPublishedGenerationState(winner);
