@@ -65,6 +65,11 @@ namespace EarTrumpet.DataModel
                 _registrationId = registrationId;
             }
 
+            internal static ProcessWatchLease Create(ProcessWatchStatus status, object data, long registrationId)
+            {
+                return new ProcessWatchLease(status, (ProcessWatcherData)data, registrationId);
+            }
+
             internal ProcessWatchStatus Status => _status;
 
             internal ProcessGenerationState GenerationState
@@ -157,7 +162,7 @@ namespace EarTrumpet.DataModel
                             && !existing.Completed)
                         {
                             existing.QuitActions.Add(callback);
-                            return new ProcessWatchLease(ProcessWatchStatus.Watching, existing, registrationId);
+                            return ProcessWatchLease.Create(ProcessWatchStatus.Watching, existing, registrationId);
                         }
                     }
                     continue;
@@ -169,7 +174,7 @@ namespace EarTrumpet.DataModel
                     continue;
                 }
 
-                return new ProcessWatchLease(ProcessWatchStatus.Unavailable, null, registrationId);
+                return ProcessWatchLease.Create(ProcessWatchStatus.Unavailable, null, registrationId);
             }
 
             Process process;
@@ -179,16 +184,16 @@ namespace EarTrumpet.DataModel
             }
             catch (ArgumentException)
             {
-                return new ProcessWatchLease(ProcessWatchStatus.AlreadyExited, null, registrationId);
+                return ProcessWatchLease.Create(ProcessWatchStatus.AlreadyExited, null, registrationId);
             }
             catch (InvalidOperationException)
             {
-                return new ProcessWatchLease(ProcessWatchStatus.Unavailable, null, registrationId);
+                return ProcessWatchLease.Create(ProcessWatchStatus.Unavailable, null, registrationId);
             }
             catch (Win32Exception ex)
             {
                 Trace.WriteLine($"ProcessWatcherService open failed for {processId}: {ex.Message}");
-                return new ProcessWatchLease(ProcessWatchStatus.Unavailable, null, registrationId);
+                return ProcessWatchLease.Create(ProcessWatchStatus.Unavailable, null, registrationId);
             }
 
             var data = new ProcessWatcherData { ProcessId = processId, Process = process };
@@ -213,13 +218,13 @@ namespace EarTrumpet.DataModel
             {
                 Trace.WriteLine($"ProcessWatcherService enable failed for {processId}: {ex.Message}");
                 var status = ClassifyFailedCandidate(data);
-                return new ProcessWatchLease(status, null, registrationId);
+                return ProcessWatchLease.Create(status, null, registrationId);
             }
             catch (Win32Exception ex)
             {
                 Trace.WriteLine($"ProcessWatcherService enable failed for {processId}: {ex.Message}");
                 var status = ClassifyFailedCandidate(data);
-                return new ProcessWatchLease(status, null, registrationId);
+                return ProcessWatchLease.Create(status, null, registrationId);
             }
             catch
             {
@@ -245,26 +250,26 @@ namespace EarTrumpet.DataModel
                     {
                         s_watchers.Add(processId, data);
                         data.IsPublished = true;
-                        return new ProcessWatchLease(ProcessWatchStatus.Watching, data, registrationId);
+                        return ProcessWatchLease.Create(ProcessWatchStatus.Watching, data, registrationId);
                     }
                 }
 
                 if (candidateExited)
                 {
                     DisposeUnpublishedCandidate(data);
-                    return new ProcessWatchLease(ProcessWatchStatus.AlreadyExited, null, registrationId);
+                    return ProcessWatchLease.Create(ProcessWatchStatus.AlreadyExited, null, registrationId);
                 }
 
                 var candidateState = GetUnpublishedCandidateState(data);
                 if (candidateState == ProcessGenerationState.Exited)
                 {
                     DisposeUnpublishedCandidate(data);
-                    return new ProcessWatchLease(ProcessWatchStatus.AlreadyExited, null, registrationId);
+                    return ProcessWatchLease.Create(ProcessWatchStatus.AlreadyExited, null, registrationId);
                 }
                 if (candidateState == ProcessGenerationState.Unknown)
                 {
                     DisposeUnpublishedCandidate(data);
-                    return new ProcessWatchLease(ProcessWatchStatus.Unavailable, null, registrationId);
+                    return ProcessWatchLease.Create(ProcessWatchStatus.Unavailable, null, registrationId);
                 }
 
                 var winnerState = GetPublishedGenerationState(winner);
@@ -276,7 +281,7 @@ namespace EarTrumpet.DataModel
                 if (winnerState == ProcessGenerationState.Unknown)
                 {
                     DisposeUnpublishedCandidate(data);
-                    return new ProcessWatchLease(ProcessWatchStatus.Unavailable, null, registrationId);
+                    return ProcessWatchLease.Create(ProcessWatchStatus.Unavailable, null, registrationId);
                 }
 
                 var transferSucceeded = false;
@@ -304,7 +309,7 @@ namespace EarTrumpet.DataModel
                 if (candidateExited)
                 {
                     DisposeUnpublishedCandidate(data);
-                    return new ProcessWatchLease(ProcessWatchStatus.AlreadyExited, null, registrationId);
+                    return ProcessWatchLease.Create(ProcessWatchStatus.AlreadyExited, null, registrationId);
                 }
                 if (!transferSucceeded)
                 {
@@ -312,7 +317,7 @@ namespace EarTrumpet.DataModel
                 }
 
                 DisposeUnpublishedCandidate(data);
-                return new ProcessWatchLease(ProcessWatchStatus.Watching, winner, registrationId);
+                return ProcessWatchLease.Create(ProcessWatchStatus.Watching, winner, registrationId);
             }
         }
 
@@ -537,8 +542,8 @@ namespace EarTrumpet.DataModel
 
             if (process == null || handler == null) return;
             try { process.Exited -= handler; }
-            catch (InvalidOperationException) { }
             catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
         }
 
         private static void DisposeUnpublishedCandidate(ProcessWatcherData data)
@@ -574,8 +579,8 @@ namespace EarTrumpet.DataModel
             {
                 if (handler != null) process.Exited -= handler;
             }
-            catch (InvalidOperationException) { }
             catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
             finally { process.Dispose(); }
         }
     }
@@ -585,6 +590,7 @@ namespace EarTrumpet.DataModel
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'ProcessWatchStatus'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'ProcessGenerationState'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'private ProcessWatchLease('
+Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'ProcessWatchLease.Create'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'ExitObserved'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'IsPublished'
 Assert-Contains 'EarTrumpet/DataModel/ProcessWatcherService.cs' 'Completed'
