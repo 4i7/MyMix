@@ -6,7 +6,7 @@ on:
       version:
         description: Release version (must match AssemblyVersion major.minor.patch)
         required: true
-        default: '1.0.4'
+        default: '1.0.5'
         type: string
   push:
     branches:
@@ -25,7 +25,7 @@ jobs:
   release:
     runs-on: self-hosted
     env:
-      RELEASE_VERSION: ${{ inputs.version || '1.0.4' }}
+      RELEASE_VERSION: ${{ inputs.version || '1.0.5' }}
 
     steps:
       - name: Checkout
@@ -144,6 +144,7 @@ jobs:
               'MyMix is an independent, unofficial derivative of EarTrumpet.',
               '',
               'Changes in this release:',
+              '- Fix the remaining pre-publication process-exit race where an already-exited candidate could briefly be published as Watching before the Exited event was delivered.',
               '- Fix AppInfo cache lifetime handling so PID reuse cannot reuse metadata from a different process generation.',
               '- Make process watcher publication, exit observation, and callback transfer generation-safe under races and access failures.',
               '- Add deterministic AppInfo/process-generation regression coverage and gate releases on those tests.',
@@ -218,7 +219,7 @@ jobs:
 
             const existing = (await github.rest.repos.listReleaseAssets({ owner, repo, release_id, per_page: 100 })).data;
             for (const asset of existing) {
-              if (asset.name === 'MyMix-x86.zip' || asset.name === 'SHA256SUMS.txt') await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+              if (asset.name === 'MyMix-x86.zip' || asset.name === 'SHA256SUMS.txt') await github.rest.repos.deleteReleaseAsset({ owner, repo, release_id, asset_id: asset.id });
             }
 
             const uploadBase = release.upload_url.replace('{?name,label}', '');
