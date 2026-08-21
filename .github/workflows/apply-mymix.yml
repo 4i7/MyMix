@@ -72,6 +72,10 @@ jobs:
         shell: powershell
         run: .\tools\Test-ProcessWatcherLifetime.ps1
 
+      - name: Validate AppInfo cache and process-generation lifetime
+        shell: powershell
+        run: .\tools\Test-AppInfoCacheLifetime.ps1
+
       - name: Smoke test MyMix startup
         shell: powershell
         run: .\tools\Smoke-TestMyMix.ps1
