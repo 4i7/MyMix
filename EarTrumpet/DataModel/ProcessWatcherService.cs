@@ -105,7 +105,6 @@ namespace EarTrumpet.DataModel
         private static readonly Dictionary<int, ProcessWatcherData> s_watchers = new Dictionary<int, ProcessWatcherData>();
         private static long s_nextRegistrationId;
 
-        // Deterministic regression-test seams. Production always binds these to the CLR APIs.
         private static Func<int, Process> s_getProcessById = Process.GetProcessById;
         private static Action<Process> s_enableRaisingEvents = process => process.EnableRaisingEvents = true;
 
@@ -158,7 +157,6 @@ namespace EarTrumpet.DataModel
                             return new ProcessWatchLease(ProcessWatchStatus.Watching, existing, registrationId);
                         }
                     }
-
                     continue;
                 }
 
@@ -190,11 +188,7 @@ namespace EarTrumpet.DataModel
                 return new ProcessWatchLease(ProcessWatchStatus.Unavailable, null, registrationId);
             }
 
-            var data = new ProcessWatcherData
-            {
-                ProcessId = processId,
-                Process = process
-            };
+            var data = new ProcessWatcherData { ProcessId = processId, Process = process };
             data.QuitActions.Add(callback);
             data.ExitedHandler = (_, __) => OnProcessExited(data);
 
@@ -264,7 +258,6 @@ namespace EarTrumpet.DataModel
                     DisposeUnpublishedCandidate(data);
                     return new ProcessWatchLease(ProcessWatchStatus.AlreadyExited, null, registrationId);
                 }
-
                 if (candidateState == ProcessGenerationState.Unknown)
                 {
                     DisposeUnpublishedCandidate(data);
@@ -277,7 +270,6 @@ namespace EarTrumpet.DataModel
                     CompletePublishedWatcher(winner, true);
                     continue;
                 }
-
                 if (winnerState == ProcessGenerationState.Unknown)
                 {
                     DisposeUnpublishedCandidate(data);
@@ -311,7 +303,6 @@ namespace EarTrumpet.DataModel
                     DisposeUnpublishedCandidate(data);
                     return new ProcessWatchLease(ProcessWatchStatus.AlreadyExited, null, registrationId);
                 }
-
                 if (!transferSucceeded)
                 {
                     continue;
@@ -326,22 +317,21 @@ namespace EarTrumpet.DataModel
         {
             DetachExitedHandler(data);
 
+            var observedExit = false;
             lock (s_lock)
             {
-                if (data.ExitObserved)
+                observedExit = data.ExitObserved;
+                if (observedExit)
                 {
                     data.Completed = true;
                     data.QuitActions.Clear();
                 }
             }
 
-            lock (s_lock)
+            if (observedExit)
             {
-                if (data.ExitObserved)
-                {
-                    DisposeUnpublishedCandidateAfterDecision(data);
-                    return ProcessWatchStatus.AlreadyExited;
-                }
+                DisposeUnpublishedCandidateAfterDecision(data);
+                return ProcessWatchStatus.AlreadyExited;
             }
 
             var probeSucceeded = false;
@@ -359,29 +349,17 @@ namespace EarTrumpet.DataModel
                     exited = process.HasExited;
                     probeSucceeded = true;
                 }
-                catch (ObjectDisposedException)
-                {
-                }
-                catch (InvalidOperationException)
-                {
-                }
-                catch (Win32Exception)
-                {
-                }
+                catch (ObjectDisposedException) { }
+                catch (InvalidOperationException) { }
+                catch (Win32Exception) { }
             }
 
             ProcessWatchStatus result;
             lock (s_lock)
             {
-                if (data.ExitObserved || (probeSucceeded && exited))
-                {
-                    result = ProcessWatchStatus.AlreadyExited;
-                }
-                else
-                {
-                    result = ProcessWatchStatus.Unavailable;
-                }
-
+                result = data.ExitObserved || (probeSucceeded && exited)
+                    ? ProcessWatchStatus.AlreadyExited
+                    : ProcessWatchStatus.Unavailable;
                 data.Completed = true;
                 data.QuitActions.Clear();
             }
@@ -395,128 +373,67 @@ namespace EarTrumpet.DataModel
             Process process;
             lock (s_lock)
             {
-                if (data.ExitObserved)
-                {
-                    return ProcessGenerationState.Exited;
-                }
-
-                if (data.Completed || data.IsPublished)
-                {
-                    return ProcessGenerationState.Unknown;
-                }
-
+                if (data.ExitObserved) return ProcessGenerationState.Exited;
+                if (data.Completed || data.IsPublished) return ProcessGenerationState.Unknown;
                 process = data.Process;
             }
 
-            if (process == null)
-            {
-                return ProcessGenerationState.Unknown;
-            }
+            if (process == null) return ProcessGenerationState.Unknown;
 
             try
             {
-                return process.HasExited
-                    ? ProcessGenerationState.Exited
-                    : ProcessGenerationState.Current;
+                return process.HasExited ? ProcessGenerationState.Exited : ProcessGenerationState.Current;
             }
-            catch (ObjectDisposedException)
-            {
-                return RecheckUnpublishedAfterProbeFailure(data);
-            }
-            catch (InvalidOperationException)
-            {
-                return RecheckUnpublishedAfterProbeFailure(data);
-            }
-            catch (Win32Exception)
-            {
-                return RecheckUnpublishedAfterProbeFailure(data);
-            }
+            catch (ObjectDisposedException) { return RecheckUnpublishedAfterProbeFailure(data); }
+            catch (InvalidOperationException) { return RecheckUnpublishedAfterProbeFailure(data); }
+            catch (Win32Exception) { return RecheckUnpublishedAfterProbeFailure(data); }
         }
 
         private static ProcessGenerationState RecheckUnpublishedAfterProbeFailure(ProcessWatcherData data)
         {
             lock (s_lock)
             {
-                return data.ExitObserved
-                    ? ProcessGenerationState.Exited
-                    : ProcessGenerationState.Unknown;
+                return data.ExitObserved ? ProcessGenerationState.Exited : ProcessGenerationState.Unknown;
             }
         }
 
         private static ProcessGenerationState GetPublishedGenerationState(ProcessWatcherData data)
         {
-            if (data == null)
-            {
-                return ProcessGenerationState.Unknown;
-            }
+            if (data == null) return ProcessGenerationState.Unknown;
 
             Process process;
             lock (s_lock)
             {
-                if (data.Completed)
+                if (data.Completed) return ProcessGenerationState.Exited;
+                if (!data.IsPublished) return ProcessGenerationState.Unknown;
+                if (!s_watchers.TryGetValue(data.ProcessId, out var current) || !ReferenceEquals(current, data))
                 {
                     return ProcessGenerationState.Exited;
                 }
-
-                if (!data.IsPublished)
-                {
-                    return ProcessGenerationState.Unknown;
-                }
-
-                if (!s_watchers.TryGetValue(data.ProcessId, out var current)
-                    || !ReferenceEquals(current, data))
-                {
-                    return ProcessGenerationState.Exited;
-                }
-
                 process = data.Process;
             }
 
-            if (process == null)
-            {
-                return ProcessGenerationState.Exited;
-            }
+            if (process == null) return ProcessGenerationState.Exited;
 
             try
             {
-                return process.HasExited
-                    ? ProcessGenerationState.Exited
-                    : ProcessGenerationState.Current;
+                return process.HasExited ? ProcessGenerationState.Exited : ProcessGenerationState.Current;
             }
-            catch (ObjectDisposedException)
-            {
-                return RecheckPublishedAfterProbeFailure(data);
-            }
-            catch (InvalidOperationException)
-            {
-                return RecheckPublishedAfterProbeFailure(data);
-            }
-            catch (Win32Exception)
-            {
-                return ProcessGenerationState.Unknown;
-            }
+            catch (ObjectDisposedException) { return RecheckPublishedAfterProbeFailure(data); }
+            catch (InvalidOperationException) { return RecheckPublishedAfterProbeFailure(data); }
+            catch (Win32Exception) { return ProcessGenerationState.Unknown; }
         }
 
         private static ProcessGenerationState RecheckPublishedAfterProbeFailure(ProcessWatcherData data)
         {
             lock (s_lock)
             {
-                if (data.Completed || data.ExitObserved)
+                if (data.Completed || data.ExitObserved) return ProcessGenerationState.Exited;
+                if (!data.IsPublished) return ProcessGenerationState.Unknown;
+                if (!s_watchers.TryGetValue(data.ProcessId, out var current) || !ReferenceEquals(current, data))
                 {
                     return ProcessGenerationState.Exited;
                 }
-
-                if (!data.IsPublished)
-                {
-                    return ProcessGenerationState.Unknown;
-                }
-
-                if (!s_watchers.TryGetValue(data.ProcessId, out var current)
-                    || !ReferenceEquals(current, data))
-                {
-                    return ProcessGenerationState.Exited;
-                }
-
                 return ProcessGenerationState.Unknown;
             }
         }
@@ -525,27 +442,12 @@ namespace EarTrumpet.DataModel
         {
             CallbackRegistration[] callbacks = null;
             var shouldDispose = false;
-
             lock (s_lock)
             {
-                if (data.Completed)
-                {
-                    return;
-                }
-
+                if (data.Completed) return;
                 data.ExitObserved = true;
-
-                if (!data.IsPublished)
-                {
-                    return;
-                }
-
-                if (!s_watchers.TryGetValue(data.ProcessId, out var current)
-                    || !ReferenceEquals(current, data))
-                {
-                    return;
-                }
-
+                if (!data.IsPublished) return;
+                if (!s_watchers.TryGetValue(data.ProcessId, out var current) || !ReferenceEquals(current, data)) return;
                 s_watchers.Remove(data.ProcessId);
                 data.IsPublished = false;
                 data.Completed = true;
@@ -554,31 +456,19 @@ namespace EarTrumpet.DataModel
                 shouldDispose = true;
             }
 
-            if (!shouldDispose)
-            {
-                return;
-            }
-
+            if (!shouldDispose) return;
             DisposeProcess(data);
             InvokeCallbacks(data.ProcessId, callbacks);
         }
 
         private static void UnwatchProcess(ProcessWatcherData expected, long registrationId)
         {
-            if (expected == null)
-            {
-                return;
-            }
+            if (expected == null) return;
 
             ProcessWatcherData toDispose = null;
             lock (s_lock)
             {
-                if (!s_watchers.TryGetValue(expected.ProcessId, out var current)
-                    || !ReferenceEquals(current, expected))
-                {
-                    return;
-                }
-
+                if (!s_watchers.TryGetValue(expected.ProcessId, out var current) || !ReferenceEquals(current, expected)) return;
                 for (var i = expected.QuitActions.Count - 1; i >= 0; i--)
                 {
                     if (expected.QuitActions[i].Id == registrationId)
@@ -587,7 +477,6 @@ namespace EarTrumpet.DataModel
                         break;
                     }
                 }
-
                 if (expected.QuitActions.Count == 0)
                 {
                     s_watchers.Remove(expected.ProcessId);
@@ -596,78 +485,39 @@ namespace EarTrumpet.DataModel
                     toDispose = expected;
                 }
             }
-
-            if (toDispose != null)
-            {
-                DisposeProcess(toDispose);
-            }
+            if (toDispose != null) DisposeProcess(toDispose);
         }
 
         private static void CompletePublishedWatcher(ProcessWatcherData data, bool invokeCallbacks)
         {
             CallbackRegistration[] callbacks = null;
             var shouldDispose = false;
-
             lock (s_lock)
             {
-                if (data == null || data.Completed)
-                {
-                    return;
-                }
-
+                if (data == null || data.Completed) return;
                 data.ExitObserved = true;
-
-                if (!data.IsPublished)
-                {
-                    return;
-                }
-
-                if (!s_watchers.TryGetValue(data.ProcessId, out var current)
-                    || !ReferenceEquals(current, data))
-                {
-                    return;
-                }
-
+                if (!data.IsPublished) return;
+                if (!s_watchers.TryGetValue(data.ProcessId, out var current) || !ReferenceEquals(current, data)) return;
                 s_watchers.Remove(data.ProcessId);
                 data.IsPublished = false;
                 data.Completed = true;
-                if (invokeCallbacks)
-                {
-                    callbacks = data.QuitActions.ToArray();
-                }
+                if (invokeCallbacks) callbacks = data.QuitActions.ToArray();
                 data.QuitActions.Clear();
                 shouldDispose = true;
             }
 
-            if (!shouldDispose)
-            {
-                return;
-            }
-
+            if (!shouldDispose) return;
             DisposeProcess(data);
-            if (invokeCallbacks)
-            {
-                InvokeCallbacks(data.ProcessId, callbacks);
-            }
+            if (invokeCallbacks) InvokeCallbacks(data.ProcessId, callbacks);
         }
 
         private static void InvokeCallbacks(int processId, CallbackRegistration[] callbacks)
         {
-            if (callbacks == null)
-            {
-                return;
-            }
-
+            if (callbacks == null) return;
             for (var i = 0; i < callbacks.Length; i++)
             {
-                try
-                {
-                    callbacks[i].Callback(processId);
-                }
-                catch (Exception ex)
-                {
-                    Trace.WriteLine($"ProcessWatcherService callback failed: {ex}");
-                }
+                try { callbacks[i].Callback(processId); }
+                catch (Exception ex) { Trace.WriteLine($"ProcessWatcherService callback failed: {ex}"); }
             }
         }
 
@@ -682,21 +532,10 @@ namespace EarTrumpet.DataModel
                 data.ExitedHandler = null;
             }
 
-            if (process == null || handler == null)
-            {
-                return;
-            }
-
-            try
-            {
-                process.Exited -= handler;
-            }
-            catch (InvalidOperationException)
-            {
-            }
-            catch (ObjectDisposedException)
-            {
-            }
+            if (process == null || handler == null) return;
+            try { process.Exited -= handler; }
+            catch (InvalidOperationException) { }
+            catch (ObjectDisposedException) { }
         }
 
         private static void DisposeUnpublishedCandidate(ProcessWatcherData data)
@@ -707,7 +546,6 @@ namespace EarTrumpet.DataModel
                 data.IsPublished = false;
                 data.QuitActions.Clear();
             }
-
             DisposeUnpublishedCandidateAfterDecision(data);
         }
 
@@ -728,28 +566,14 @@ namespace EarTrumpet.DataModel
                 data.ExitedHandler = null;
             }
 
-            if (process == null)
-            {
-                return;
-            }
-
+            if (process == null) return;
             try
             {
-                if (handler != null)
-                {
-                    process.Exited -= handler;
-                }
+                if (handler != null) process.Exited -= handler;
             }
-            catch (InvalidOperationException)
-            {
-            }
-            catch (ObjectDisposedException)
-            {
-            }
-            finally
-            {
-                process.Dispose();
-            }
+            catch (InvalidOperationException) { }
+            catch (ObjectDisposedException) { }
+            finally { process.Dispose(); }
         }
     }
 }
